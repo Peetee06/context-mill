@@ -149,7 +149,7 @@ Resolve two concrete commands for this project: the production **build** command
 - **Android** Build: `./gradlew assembleRelease`. Run: launch on a device/emulator (Android Studio, or `./gradlew installRelease`).
 - **iOS** Local build + run are one step: Xcode Run with Build Configuration = Release. `xcodebuild` is CI-only.
 - **React Native (Expo)** Build + run are one step per platform: `npx expo run:ios --configuration Release` / `npx expo run:android --variant release`.
-- **Rust** Build: `cargo build --release`. Run: `./target/release/<binary>` — read the binary name from `Cargo.toml` (the `[package]` name, or a `[[bin]]` entry).
+- **Rust** Build: `cargo build --release && posthog-cli --dotenv-file .env symbol-sets upload --directory target/release` — the upload is a separate CLI step, so the resolved build command must include it (use the project's build script/Makefile target instead when you wired the upload into one). Run: `./target/release/<binary>` — read the binary name from `Cargo.toml` (the `[package]` name, or a `[[bin]]` entry).
 - **Flutter** One pair per platform you wired:
   - Web — Build: `flutter build web --source-maps`. Run: `python3 -m http.server 8000 --directory build/web`. Not `flutter run -d chrome` — the dev server skips the upload.
   - Android — Build: `flutter build apk --release`. Run: `flutter run --release`.
