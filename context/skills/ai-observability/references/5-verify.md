@@ -27,11 +27,13 @@ After triggering one request:
 4. If a distinct id was wired, the trace should be attributed to that person in Persons, not anonymous.
 5. Generation properties worth spot-checking: `$ai_provider`, `$ai_model`, `$ai_input_tokens`, `$ai_output_tokens`, `$ai_latency`.
 
+**Before handing over: prove the imports run.** In the project's environment, import what the instrumentation uses (e.g. `python -c "from posthog.ai.otel import PostHogSpanProcessor"` or the wrapper import). If it fails — wrong package version, module not shipped in the installed release — go back to the gate in `4-nesting.md` and switch mechanisms. Do not ship non-running code with a caveat.
+
 Failure modes and what they mean:
 
 - **Each generation is its own trace** → the enclosing span isn't wrapping the calls (OTel path), or calls aren't sharing a `posthog_trace_id` (wrapper path). Back to `4-nesting.md`.
-- **Generations appear but your manual spans don't** → the spans aren't `ai.*`-named; they're being silently dropped. Rename them.
-- **No `$ai_session_id` / anonymous person** → the attributes were set on the Resource (process-global) instead of per-request, or not at all.
+- **Generations appear but your non-LLM spans don't** → they were hand-authored OTel spans; ingest drops spans without provider-prefixed (`gen_ai.`/`ai.`/…) attribute keys — span names are never consulted. Emit them as `$ai_span` events via `posthog.capture()` instead.
+- **No `$ai_session_id` / anonymous person** → OTel path: the two Resource attributes (`posthog.distinct_id`, `$ai_session_id`) are missing from the bootstrap. Wrapper path: per-call params not passed.
 
 If nothing shows up at all within a minute:
 
@@ -43,5 +45,6 @@ If nothing shows up at all within a minute:
 
 - Do not run the vendor SDK yourself.
 - Do not embed API keys anywhere to enable a smoke test.
+- Do not report a run as done while an instrumentation import fails in the project's environment — switching mechanisms at the `4-nesting.md` gate is part of this skill, shipping the caveat is not.
 - Do not claim the integration works until the user has confirmed the **tree** — grouped trace, session (if applicable), attribution (if applicable). A confirmed flat generation is "bootstrap verified, nesting unverified", not done.
 - Do not claim the integration works until the user has confirmed anything at all. Report it as "wired, unverified" if you never got confirmation — the report step will surface that.

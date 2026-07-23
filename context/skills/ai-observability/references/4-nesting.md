@@ -20,39 +20,15 @@ One vocabulary, every variant:
 | Generation | `$ai_generation` event | one LLM call |
 | Tree edge | `$ai_parent_id` | parent is a `trace_id` or another `span_id` |
 
-## Three ways to express it — branch by variant
+## Pick the mechanism — decision gate
 
-The model is constant; only the API changes. Pick the branch matching the mechanism you installed.
+Work through these in order; take the first that matches. Whichever you pick, its imports must run in the project's environment — if an import fails during verification, come back here and take the next path, don't ship the caveat (some `posthog` releases don't ship `posthog.ai.otel` — 6.9.3, which older Pythons silently resolve to, doesn't; 7.29.0 does).
 
-### OTel auto-instrumentation (most variants)
+1. **Variant has a wrapper SDK** (`openai`, `anthropic`, `gemini`, `langchain`, `vercel`, `openai-agents`) **and** the app has per-request user or conversation identity → **wrapper**. Per-call params, no manual spans, no propagation questions.
+2. **App already runs OpenTelemetry**, or spans must also fan out to non-PostHog backends → **OTel + Resource attributes**.
+3. **Neither** → **manual capture**.
 
-Wrap each logical operation in an **enclosing span**. Auto-instrumented generations nest under it automatically because they share the OTel trace context — spans in one OTel trace share `$ai_trace_id`, and a child's `parent_span_id` becomes `$ai_parent_id`. Nothing else is needed for trace grouping.
-
-```python
-def ask(self, question: str) -> str:
-    with tracer.start_as_current_span(
-        "ai.support_request",                     # ai.* prefix — required, see below
-        attributes={
-            "$ai_session_id": self.thread_id,     # groups this thread's traces
-            "posthog.distinct_id": self.user_id,  # attributes to the person
-        },
-    ):
-        category = self._classify(question)       # generation, nests automatically
-        order = self._lookup_order(category)      # span, see below
-        return self._answer(question, category, order)
-
-def _lookup_order(self, category: str) -> dict | None:
-    if category != "order_status":
-        return None
-    with tracer.start_as_current_span("ai.lookup_order"):   # non-LLM step
-        return lookup_order(self.user_id)
-```
-
-**The `ai.*` naming rule — silent-failure trap.** PostHog keeps a span only if its name *or an attribute key* begins with `gen_ai.`, `llm.`, `ai.`, or `traceloop.`. Everything else is dropped without error. An enclosing span named `handle_request` or a `lookup_order` span **vanishes** — taking its session and distinct-id attributes with it. Every manual span on the OTel path must be named `ai.*` (e.g. `ai.support_request`, `ai.lookup_order`). This is the single most likely way a well-intentioned run still produces a broken tree.
-
-**Session and distinct-id propagation.** OTel does not inherit attributes parent→child, and PostHog's processor adds no baggage propagation. A **Resource** attribute is process-global — fine only when one process equals one session/user. A **runtime-varying** session or user must be set as an attribute on every span you want grouped (in practice: the enclosing span of each request, as above). If per-request attribution matters and the variant has a wrapper SDK, prefer the wrapper — its per-call params sidestep this.
-
-### Wrapper SDK (`openai`, `anthropic`, `gemini`, `langchain`, `vercel`, `openai-agents` wrapper clients)
+## The wrapper path
 
 Per-call parameters, no manual spans needed. Python kwargs: `posthog_trace_id`, `posthog_distinct_id`, `posthog_properties` (put `$ai_session_id` here), `posthog_groups`. Node equivalents are camelCase (`posthogTraceId`, …).
 
@@ -73,7 +49,60 @@ def ask(self, question: str) -> str:
     return self._answer(question, category, order, ph)
 ```
 
-### `manual-capture`
+Non-LLM steps worth seeing: emit a `$ai_span` event with `posthog.capture()` sharing the same `$ai_trace_id` (shape below, under manual capture).
+
+## The OTel path
+
+Three goals, three separate mechanisms — don't conflate them:
+
+**Trace grouping — an enclosing span, any name, zero attributes.** Auto-instrumented generations inside it inherit its OTel trace context in-process, so they share one `$ai_trace_id`. The enclosing span itself does **not** need to survive ingest (or carry anything) for this to work:
+
+```python
+def ask(self, question: str) -> str:
+    with tracer.start_as_current_span("support_request"):   # name is irrelevant to ingest
+        category = self._classify(question)                 # generation, same trace
+        order = self._lookup_order(category)
+        return self._answer(question, category, order)      # generation, same trace
+```
+
+**Session + user — two Resource attributes in the bootstrap you already wrote.** Ingest copies Resource attributes onto every surviving event (only `host.` / `process.` / `os.` / `telemetry.` prefixes are filtered), and `posthog.distinct_id` on the Resource is the documented identity mechanism:
+
+```python
+resource=Resource(attributes={
+    SERVICE_NAME: "my-app",
+    "posthog.distinct_id": user_id,      # already in the install docs
+    "$ai_session_id": session_id,        # add this line; process-global
+})
+```
+
+Resource attributes are process-global by nature — which is fine, because an app whose session/user vary per request was already routed to the wrapper by the gate above. If an app genuinely must stay on OTel *and* needs per-request values, use the standard `opentelemetry-processor-baggage` package — do not generate custom `SpanProcessor` classes in user codebases.
+
+**Non-LLM step — a manual `$ai_span` event via `posthog.capture()`** (the `posthog` client class ships in the package you already installed), sharing the OTel trace id:
+
+```python
+from opentelemetry import trace as otel_trace
+
+def _lookup_order(self, category: str) -> dict | None:
+    if category != "order_status":
+        return None
+    result = lookup_order(self.user_id)
+    ctx = otel_trace.get_current_span().get_span_context()
+    posthog.capture(
+        distinct_id=self.user_id,
+        event="$ai_span",
+        properties={
+            "$ai_trace_id": format(ctx.trace_id, "032x"),   # same trace as the generations
+            "$ai_span_name": "lookup_order",
+        },
+    )
+    return result
+```
+
+Or omit it and say so in the report — "no non-LLM step worth tracing" is a finding.
+
+**Why not hand-authored OTel spans with attributes?** Ingest keeps a span only if an **attribute key** starts with a provider prefix (`gen_ai.` / `ai.` / `traceloop.` / `pydantic_ai.`) — the span *name* is never consulted. A hand-made span carrying only `$ai_session_id` or `posthog.distinct_id` is silently dropped, taking those values with it. Don't fight this rule; put session/user on the Resource and non-LLM steps through `capture()`, as above.
+
+## Manual capture
 
 Emit `$ai_trace` / `$ai_span` / `$ai_generation` events explicitly and wire the tree yourself: every event in a request shares `$ai_trace_id`; child events set `$ai_parent_id` to the parent's `trace_id` or `span_id`; `$ai_session_id` goes in properties. The manual-capture install page carries the full property tables.
 
@@ -81,16 +110,17 @@ Emit `$ai_trace` / `$ai_span` / `$ai_generation` events explicitly and wire the 
 
 For each request-shaped code path you mapped in `1-begin.md`:
 
-1. Group its LLM calls into one trace (enclosing span, shared `posthog_trace_id`, or shared `$ai_trace_id` — per the branch above).
-2. Set `$ai_session_id` from the conversation identifier, if the app has one.
-3. Set the distinct id from the user identifier, if the app has one.
-4. Wrap non-LLM steps worth seeing (retrieval, tool calls, validation) as spans — `ai.*`-named on the OTel path.
+1. Group its LLM calls into one trace (shared `posthog_trace_id`, enclosing span, or shared `$ai_trace_id` — per the gate's branch).
+2. Set `$ai_session_id` from the conversation identifier, if the app has one (wrapper: `posthog_properties`; OTel: Resource).
+3. Set the distinct id from the user identifier, if the app has one (wrapper: `posthog_distinct_id`; OTel: Resource `posthog.distinct_id`).
+4. Emit `$ai_span` events for non-LLM steps worth seeing (retrieval, tool calls, validation).
 
 Keep it minimal: instrument the representative paths you mapped, don't refactor the app. If the app genuinely has no conversation or user concept, say so in the report — omitting a session is a finding, not a failure.
 
 ## Do not
 
-- Do not name a manual OTel span anything that doesn't start with `ai.` — it will be silently dropped.
+- Do not attach `$ai_session_id` or the distinct id only to a hand-authored OTel span — ingest drops spans without provider-prefixed attribute keys (names are never consulted). Put them on the Resource (process-global) or the wrapper's per-call params (per-request).
 - Do not rely on omitted `posthog_trace_id` to group wrapper-SDK calls — each call gets its own fresh UUID.
-- Do not put a runtime-varying `$ai_session_id` or distinct id only on the Resource — the Resource is process-global.
+- Do not put a runtime-varying `$ai_session_id` or distinct id on the Resource — the Resource is process-global; per-request identity belongs on the wrapper path.
+- Do not ship a code path whose imports failed in the project's environment — switch to the gate's next mechanism instead.
 - Do not skip this step because generations already appear in PostHog. Flat generations are the failure mode this step exists to prevent.
