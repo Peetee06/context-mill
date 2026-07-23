@@ -282,6 +282,7 @@ function serveFile(res, filePath, contentType, attachmentName = null) {
 
 function createServer() {
     const server = http.createServer((req, res) => {
+        console.log(`→ ${req.method} ${req.url}`);
         // A skill is served as its own zip, or — for a bundled group — as one JSON of every variant.
         const skillMatch = req.url?.match(/^\/skills\/(.+\.(zip|json))$/);
         if (skillMatch) {
