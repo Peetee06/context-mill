@@ -1,7 +1,7 @@
 ---
 next_step: 2-install.md
 title: AI Observability Setup - Begin
-description: Pick the right variant, confirm prerequisites, and locate the LLM call sites before editing
+description: Pick the right variant, locate the LLM call sites, and map the app's session/trace/span structure before editing
 ---
 
 Before touching any code, decide which variant of this skill to install, confirm the two prerequisites, and get a read on where in the project LLM calls actually happen. AI Observability instruments an existing setup — if the setup isn't there, this skill can't do its job.
@@ -49,4 +49,13 @@ Grep for where the vendor SDK is imported and called. This is not a full analysi
 
 Note the app's entry point (server startup file, `main.py`, `index.ts`, `instrumentation.ts` in Next.js, etc.) — OTel must be initialized *before* the vendor SDK is imported, and the entry point is where that happens.
 
-Do not edit yet. Once you have a note of the entry point and the call sites, move on to `2-install.md`.
+## Map the logical structure
+
+Instrumentation captures individual LLM calls; the *tree* that makes them useful — session → trace → span → generation — comes from application semantics only the code can tell you. Answer these four questions now, from the code, and write the answers down; `4-nesting.md` consumes them:
+
+- **What is one session here?** The unit of conversation — a conversation object, a thread id, a workflow run. Some apps have none; that's a valid answer.
+- **What is one trace?** The unit of request — typically a request handler or the top-level function that may make several model calls to produce one result.
+- **Which non-LLM steps deserve spans?** Retrieval, tool calls, validation — steps between model calls worth seeing in the trace.
+- **What is the distinct-id source?** A `user_id` in scope at the call sites? None → events will be anonymous; note that too.
+
+Do not edit yet. Once you have the entry point, the call sites, and the structure map, move on to `2-install.md`.

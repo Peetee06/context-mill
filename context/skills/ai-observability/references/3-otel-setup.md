@@ -1,10 +1,12 @@
 ---
-next_step: 4-verify.md
+next_step: 4-nesting.md
 title: AI Observability Setup - OpenTelemetry
 description: Initialize the OTel TracerProvider with PostHog's span processor and attach the provider instrumentor
 ---
 
-Initialize OpenTelemetry once, at the app's entry point, so it is running before any LLM call executes. This is the single place PostHog reads the project token and host from — everything after this is normal LLM code that gets auto-traced.
+Initialize OpenTelemetry once, at the app's entry point, so it is running before any LLM call executes. This is the single place PostHog reads the project token and host from.
+
+This bootstrap captures individual generations only. It does **not** build the session → trace → span tree — that is application-level work done in `4-nesting.md`, and it is a mandatory part of this skill, not optional polish.
 
 ## Environment variables
 
