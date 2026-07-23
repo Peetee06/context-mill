@@ -1,10 +1,10 @@
 ---
-next_step: 3-otel-setup.md
+next_step: 3-instrument.md
 title: AI Observability Setup - Install
-description: Add the OpenTelemetry SDK, PostHog span processor, and provider instrumentation to the manifest
+description: Declare the packages for the mechanism chosen at the gate - wrapper, OTel, or manual capture
 ---
 
-Declare the packages this variant needs in the project's manifest. Do not run the package manager here — the base integration's build/verify step (or the user) installs everything in one pass.
+Declare the packages the mechanism chosen in `1-begin.md` needs in the project's manifest — and only those. Do not run the package manager here — the base integration's build/verify step (or the user) installs everything in one pass.
 
 Read the manifest first. If any of the required packages is already declared, leave the existing version alone and say so. Match the style of dependencies already in the file (versions, ordering, dev vs. runtime).
 
@@ -12,7 +12,20 @@ Read the manifest first. If any of the required packages is already declared, le
 
 The linked install page for this variant carries the authoritative command. The shapes below reflect the current defaults across Tier-1 providers.
 
-### Python — the standard OTel path
+### Wrapper path
+
+No OTel packages at all:
+
+```
+posthog                # Python — ships the posthog.ai.<provider> wrapper clients
+```
+
+```
+@posthog/ai            # Node — ships the wrapper clients
+posthog-node           # Node — the PostHog client the wrapper takes
+```
+
+### Python — the OTel path
 
 Three packages:
 
@@ -31,7 +44,7 @@ Examples:
 
 The vendor SDK itself (`openai`, `anthropic`, `langchain`, …) is a prerequisite — it should already be declared. Do not add or upgrade it.
 
-### Node — the standard OTel path
+### Node — the OTel path
 
 ```
 @posthog/ai                                     # PostHog span processor
@@ -57,7 +70,7 @@ No provider instrumentation package — Vercel AI emits OTel spans natively when
 @opentelemetry/resources
 ```
 
-### `manual-capture` variant
+### Manual-capture path
 
 No OTel packages. Just PostHog core:
 
@@ -66,11 +79,11 @@ posthog                # Python
 posthog-node           # Node
 ```
 
-If PostHog core is already installed (it should be — see `1-begin.md`), this file has nothing to add. Skip to `3-otel-setup.md`, which describes the manual `capture(...)` call shape.
+If PostHog core is already installed (it should be — see `1-begin.md`), this file has nothing to add. Skip to `3-instrument.md`, which describes the manual `capture(...)` call shape.
 
 ## Do not do
 
 - Do not run `npm install` / `pip install` here.
 - Do not edit the lockfile.
 - Do not upgrade the vendor SDK.
-- Do not add both an OTel-based instrumentation package *and* the older wrapper client — pick one. This skill uses the OTel path.
+- Do not add packages for more than one mechanism — no OTel instrumentation packages on a wrapper-path run, and vice versa. The gate in `1-begin.md` picked exactly one.

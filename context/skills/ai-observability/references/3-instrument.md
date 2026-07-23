@@ -1,14 +1,14 @@
 ---
 next_step: 4-nesting.md
-title: AI Observability Setup - OpenTelemetry
-description: Initialize the OTel TracerProvider with PostHog's span processor and attach the provider instrumentor
+title: AI Observability Setup - Instrument
+description: Wire the mechanism chosen at the gate - wrapper client swap, OTel bootstrap, or manual capture
 ---
 
-Initialize OpenTelemetry once, at the app's entry point, so it is running before any LLM call executes. This is the single place PostHog reads the project token and host from.
+Wire the mechanism you chose at the gate in `1-begin.md`. Only one of the three sections below applies — do not wire OTel for a wrapper-path run or vice versa.
 
-This bootstrap captures individual generations only. It does **not** build the session → trace → span tree — that is application-level work done in `4-nesting.md`, and it is a mandatory part of this skill, not optional polish.
+Whatever the mechanism, this step captures individual generations only. It does **not** build the session → trace → span tree — that is application-level work done in `4-nesting.md`, and it is a mandatory part of this skill, not optional polish.
 
-## Environment variables
+## Environment variables (all mechanisms)
 
 Route the PostHog credentials through env vars, using the wizard's `set_env_values` tool (never hardcode). Reuse whatever names the base PostHog integration already set — typically:
 
@@ -17,9 +17,31 @@ Route the PostHog credentials through env vars, using the wizard's `set_env_valu
 
 If the project has an `.env.example` file, add the names there with empty placeholder values so collaborators know what to set. Create `.env.example` if it doesn't exist. Never write real secrets to any file.
 
-## Initialization shape
+## The wrapper path
 
-There is one initialization call per app. It runs once, at startup, before any vendor SDK call. The linked install page carries the exact code for this variant's language — copy from there.
+No OTel, no entry-point work. Swap the vendor client for PostHog's drop-in wrapper at the module where the client is constructed, and hand it a PostHog client:
+
+```python
+from posthog import Posthog
+from posthog.ai.anthropic import Anthropic          # swap per provider: posthog.ai.openai, .gemini, …
+
+posthog = Posthog(os.environ["POSTHOG_API_KEY"], host=os.environ["POSTHOG_HOST"])
+client = Anthropic(posthog_client=posthog)          # same constructor args as the vendor client otherwise
+```
+
+```typescript
+import { PostHog } from 'posthog-node'
+import { Anthropic } from '@posthog/ai/anthropic'   // swap per provider: @posthog/ai/openai, /gemini, /vercel
+
+const posthog = new PostHog(process.env.POSTHOG_API_KEY!, { host: process.env.POSTHOG_HOST! })
+const client = new Anthropic({ posthog })
+```
+
+The wrapper is call-compatible with the vendor client — existing `client.messages.create(...)` / `client.chat.completions.create(...)` calls keep working unchanged and now emit `$ai_generation` events. The per-call `posthog_*` params (trace id, distinct id, session) are `4-nesting.md`'s job. The linked install page carries the exact import for this variant.
+
+## The OTel path
+
+One initialization call per app. It runs once, at startup, before any vendor SDK call. The linked install page carries the exact code for this variant's language — copy from there.
 
 ### Python — the standard OTel path
 
@@ -79,17 +101,17 @@ const result = await generateText({
 
 If the project has many call sites, wrap the config into a shared helper rather than repeating it inline.
 
-## The PostHog client
+## The PostHog client (wrapper + manual paths)
 
-Some shapes need a PostHog client instance — the `manual-capture` variant, and wrappers that take a client. Look for a reusable one before creating anything:
+The wrapper and manual-capture paths need a PostHog client instance. Look for a reusable one before creating anything:
 
 - Search the project for an existing client: a `posthog-js` init on the frontend, a `PostHog` instance from `posthog` / `posthog-node` on the backend.
 - Frontend: the client is a singleton — always reuse it, never instantiate a second one.
 - Backend: reuse a shared instance if the project has one; if none exists, create one where the instrumentation lives — once, at module level, reused across call sites — and use it when initializing the wrappers.
 
-### `manual-capture` variant
+## The manual-capture path
 
-No OTel. Capture each generation explicitly at the call site:
+No OTel, no wrapper. Capture each generation explicitly at the call site:
 
 ```python
 posthog.capture(
@@ -111,6 +133,7 @@ Refer to `/docs/ai-observability/manual-capture` for the full property list.
 
 ## Do not
 
-- Do not create a PostHog client where one already exists — search first and reuse it (the frontend client is a singleton). Only a backend with no client creates one, once, at module level. Either way, reuse the project token / host already in the app's env — the OTel span processor is a separate exporter, not a separate PostHog install.
-- Do not put SDK init inside a request handler. Once per process, at startup.
-- Do not import the vendor SDK above the OTel init in the same file — the instrumentor patches the SDK when it loads, so the order matters.
+- Do not wire more than one mechanism — the gate in `1-begin.md` chose exactly one.
+- Do not create a PostHog client where one already exists — search first and reuse it (the frontend client is a singleton). Only a backend with no client creates one, once, at module level. Either way, reuse the project token / host already in the app's env — this is a separate exporter, not a separate PostHog install.
+- Do not put client or SDK init inside a request handler. Once per process, at module level or startup.
+- OTel path: do not import the vendor SDK above the OTel init in the same file — the instrumentor patches the SDK when it loads, so the order matters.

@@ -1,7 +1,7 @@
 ---
 next_step: 2-install.md
 title: AI Observability Setup - Begin
-description: Pick the right variant, locate the LLM call sites, and map the app's session/trace/span structure before editing
+description: Pick the right variant, locate the LLM call sites, map the app's session/trace/span structure, and choose the instrumentation mechanism before editing
 ---
 
 Before touching any code, decide which variant of this skill to install, confirm the two prerequisites, and get a read on where in the project LLM calls actually happen. AI Observability instruments an existing setup — if the setup isn't there, this skill can't do its job.
@@ -35,7 +35,7 @@ Grep the project for one of:
 
 **This is not a prerequisite.** The OTel-based variants use `PostHogSpanProcessor`, a self-contained exporter that just takes an API key + host — it does not depend on a `posthog.init(...)` call anywhere. The `manual-capture` variant uses `posthog.capture(...)`, which needs the traditional SDK, but the install step will add it if it isn't there.
 
-If a `posthog.init(...)` (or equivalent) **is** already present, note the env-var names it reads (`POSTHOG_API_KEY`, `NEXT_PUBLIC_POSTHOG_KEY`, etc.) and reuse them in `3-otel-setup.md` — don't invent parallel names. If nothing is there, `3-otel-setup.md` will set fresh values via `set_env_values`.
+If a `posthog.init(...)` (or equivalent) **is** already present, note the env-var names it reads (`POSTHOG_API_KEY`, `NEXT_PUBLIC_POSTHOG_KEY`, etc.) and reuse them in `3-instrument.md` — don't invent parallel names. If nothing is there, `3-instrument.md` will set fresh values via `set_env_values`.
 
 ## Locate the LLM call sites
 
@@ -47,7 +47,7 @@ Grep for where the vendor SDK is imported and called. This is not a full analysi
 - Vercel AI: `generateText(`, `streamText(`, `import ... from 'ai'`
 - Google Gemini: `genai.Client(`, `new GoogleGenerativeAI(`
 
-Note the app's entry point (server startup file, `main.py`, `index.ts`, `instrumentation.ts` in Next.js, etc.) — OTel must be initialized *before* the vendor SDK is imported, and the entry point is where that happens.
+Note the app's entry point (server startup file, `main.py`, `index.ts`, `instrumentation.ts` in Next.js, etc.) — on the OTel path, init must run there *before* the vendor SDK is imported; the wrapper path edits the call sites instead.
 
 ## Map the logical structure
 
@@ -58,4 +58,15 @@ Instrumentation captures individual LLM calls; the *tree* that makes them useful
 - **Which non-LLM steps deserve spans?** Retrieval, tool calls, validation — steps between model calls worth seeing in the trace.
 - **What is the distinct-id source?** A `user_id` in scope at the call sites? None → events will be anonymous; note that too.
 
-Do not edit yet. Once you have the entry point, the call sites, and the structure map, move on to `2-install.md`.
+## Choose the mechanism
+
+There are three ways to instrument: a **PostHog wrapper client** (per-call params), **OTel auto-instrumentation** (bootstrap + enclosing spans), and **manual capture** (explicit events). Do not default to OTel — pick from this gate, in order, using the variant and the structure map above:
+
+1. **App already runs OpenTelemetry**, or its spans must also fan out to non-PostHog backends → **OTel**.
+2. **Variant has a PostHog wrapper client** — Python `posthog` ships `posthog.ai.{openai,anthropic,gemini,langchain,openai_agents,claude_agent_sdk}`; Node `@posthog/ai` ships `{openai,anthropic,gemini,vercel}` — → **wrapper**. Simplest path, and the only one that handles per-request user/conversation identity without extra machinery.
+3. **Anything else** (most provider variants have no wrapper) → **OTel**.
+4. **No vendor SDK at all** → you already picked the `manual-capture` variant above → **manual capture**.
+
+Record the choice — `2-install.md` and `3-instrument.md` branch on it. If the chosen mechanism's imports fail in the project's environment at verification time, come back to this gate and take the next viable path; do not ship non-running code.
+
+Do not edit yet. Once you have the entry point, the call sites, the structure map, and the mechanism, move on to `2-install.md`.

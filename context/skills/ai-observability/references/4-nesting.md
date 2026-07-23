@@ -4,7 +4,7 @@ title: AI Observability Setup - Nesting
 description: Build the session → trace → span → generation tree on top of the bootstrap — this step is mandatory, not optional polish
 ---
 
-The bootstrap from `3-otel-setup.md` captures each LLM call in isolation. It has no concept of what constitutes a *request* (a trace), a *conversation* (a session), or a *non-LLM step* (a span) — those are application semantics only the code can tell you. Without this step, a request that makes two model calls with a lookup in between lands as two disconnected single-generation traces, no session, no user attribution, and the lookup invisible. The product is built around the tree; flat generations degrade it to a per-call cost log.
+The instrumentation from `3-instrument.md` captures each LLM call in isolation. It has no concept of what constitutes a *request* (a trace), a *conversation* (a session), or a *non-LLM step* (a span) — those are application semantics only the code can tell you. Without this step, a request that makes two model calls with a lookup in between lands as two disconnected single-generation traces, no session, no user attribution, and the lookup invisible. The product is built around the tree; flat generations degrade it to a per-call cost log.
 
 Use the structure map you wrote down in `1-begin.md`. This step turns it into code.
 
@@ -20,13 +20,7 @@ One vocabulary, every variant:
 | Generation | `$ai_generation` event | one LLM call |
 | Tree edge | `$ai_parent_id` | parent is a `trace_id` or another `span_id` |
 
-## Pick the mechanism — decision gate
-
-Work through these in order; take the first that matches. Whichever you pick, its imports must run in the project's environment — if an import fails during verification, come back here and take the next path, don't ship the caveat (some `posthog` releases don't ship `posthog.ai.otel` — 6.9.3, which older Pythons silently resolve to, doesn't; 7.29.0 does).
-
-1. **Variant has a wrapper SDK** (`openai`, `anthropic`, `gemini`, `langchain`, `vercel`, `openai-agents`) **and** the app has per-request user or conversation identity → **wrapper**. Per-call params, no manual spans, no propagation questions.
-2. **App already runs OpenTelemetry**, or spans must also fan out to non-PostHog backends → **OTel + Resource attributes**.
-3. **Neither** → **manual capture**.
+The mechanism was chosen at the gate in `1-begin.md` and wired in `3-instrument.md` — use that path's section below. If its imports fail in the project's environment during verification (some `posthog` releases don't ship `posthog.ai.otel` — 6.9.3, which older Pythons silently resolve to, doesn't; 7.29.0 does), return to the gate and take the next viable path; don't ship the caveat.
 
 ## The wrapper path
 
@@ -75,7 +69,7 @@ resource=Resource(attributes={
 })
 ```
 
-Resource attributes are process-global by nature — which is fine, because an app whose session/user vary per request was already routed to the wrapper by the gate above. If an app genuinely must stay on OTel *and* needs per-request values, use the standard `opentelemetry-processor-baggage` package — do not generate custom `SpanProcessor` classes in user codebases.
+Resource attributes are process-global by nature — fine when one process serves one session/user. An app on the OTel path whose session/user vary per request should reconsider the wrapper at the `1-begin.md` gate first. If an app genuinely must stay on OTel *and* needs per-request values, use the standard `opentelemetry-processor-baggage` package — do not generate custom `SpanProcessor` classes in user codebases.
 
 **Non-LLM step — a manual `$ai_span` event via `posthog.capture()`** (the `posthog` client class ships in the package you already installed), sharing the OTel trace id:
 
