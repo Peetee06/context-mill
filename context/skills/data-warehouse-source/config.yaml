@@ -15,3 +15,5 @@ variants:
       - https://posthog.com/docs/cdp/sources/snowflake.md
       - https://posthog.com/docs/cdp/sources/bigquery.md
       - https://posthog.com/docs/cdp/sources/stripe.md
+      - https://posthog.com/docs/cdp/sources/woocommerce.md
+      - https://posthog.com/docs/cdp/sources/shopify.md
