@@ -1,0 +1,10 @@
+{
+  "name": "posthog/context-mill-wordpress-example",
+  "description": "Minimal WordPress plugin demonstrating PostHog client + server integration",
+  "type": "wordpress-plugin",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.0",
+    "posthog/posthog-php": "^4.0"
+  }
+}
