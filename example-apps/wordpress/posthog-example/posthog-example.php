@@ -59,6 +59,9 @@ function posthog_example_init(): void
 
     PostHog::init(getenv('POSTHOG_PROJECT_TOKEN'), [
         'host' => getenv('POSTHOG_HOST') ?: 'https://us.i.posthog.com',
+        'error_tracking' => [
+            'enabled' => true,
+        ],
     ]);
 }
 add_action('plugins_loaded', 'posthog_example_init');
