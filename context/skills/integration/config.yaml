@@ -161,6 +161,16 @@ variants:
     docs_urls:
       - https://posthog.com/docs/libraries/php.md
 
+  - id: wordpress
+    framework: wordpress
+    example_paths: example-apps/wordpress
+    display_name: WordPress
+    description: PostHog integration for self-hosted WordPress sites and plugins, combining client-side autocapture with server-side PHP SDK capture
+    tags: [wordpress, php, cms]
+    docs_urls:
+      - https://posthog.com/docs/libraries/wordpress.md
+      - https://posthog.com/docs/libraries/php.md
+
   - id: ruby-on-rails
     framework: rails
     example_paths: example-apps/ruby-on-rails

@@ -159,6 +159,16 @@ commandments:
     - Do NOT use Laravel's event system or observers for analytics - call capture explicitly where actions occur
     - Call PostHog::flush() after capture in queue jobs, Horizon, and Octane - a long-running worker never destructs, so its events sit in the SDK buffer until batch_size (default 100) is reached and are silently lost on restart
 
+  wordpress:
+    - Ship the integration as a standalone plugin in wp-content/plugins - do NOT edit a theme's functions.php, which is lost on theme switch or theme update
+    - Guard every plugin entry file with `if (!defined('ABSPATH')) { exit; }` before any other code
+    - Print the client snippet from a wp_head hook and escape the interpolated token with esc_js() - never echo a raw token into markup
+    - Read the project token from a wp-config.php constant or a WordPress option - do NOT hardcode it in plugin source
+    - Capture pageviews with the client SDK and reserve PostHog::capture for real server-side WordPress actions (comment_post, woocommerce_thankyou, user_register)
+    - Call PostHog::flush() at the end of a capture - a web request has no single exit point like a CLI script does
+    - Evaluate feature flags client-side on pages served by full-page caching (Varnish, batcache, WP Super Cache) - server-side flag checks are baked into the cached HTML for every visitor
+    - WordPress catches fatals with its own WP_Fatal_Error_Handler and renders the recovery-mode page, so a fatal can be swallowed before a PHP handler reports it - capture exceptions explicitly with PostHog::captureException in a try/catch, and do not rely on WP_DEBUG being on in production to surface them
+
   ruby:
     - "posthog-ruby is the Ruby SDK gem name (add `gem 'posthog-ruby'` to Gemfile) but require it with `require 'posthog'` (NOT `require 'posthog-ruby'`)"
     - "Use PostHog::Client.new(api_key: key, host: host) for instance-based initialization in scripts and CLIs"
