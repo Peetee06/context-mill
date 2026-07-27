@@ -15,7 +15,7 @@ The existing PostHog WordPress docs teach editing a theme's `functions.php` for 
 
 ## Features Demonstrated
 
-- **Client-side autocapture** — the same `wp_head` JS-snippet pattern as the PostHog WordPress docs, sourced from env instead of hardcoded
+- **Client-side autocapture** — the same `wp_head` JS-snippet pattern as the PostHog WordPress docs, sourced from a `wp-config.php` constant instead of hardcoded
 - **One server-side event** — captures a real WordPress action (`comment_post`) with `PostHog::capture(...)`, then flushes immediately since a PHP-FPM/mod_php request has no single explicit exit point
 - **Error tracking** — enabled in `PostHog::init(...)` so unhandled PHP errors reach PostHog
 
@@ -24,11 +24,16 @@ The existing PostHog WordPress docs teach editing a theme's `functions.php` for 
 ```bash
 cd posthog-example
 composer install
-cp .env.example .env
-# edit .env and add your PostHog project token
 ```
 
-Drop `posthog-example/` into any WordPress install's `wp-content/plugins/` directory and activate it.
+Add your PostHog project token to the site's `wp-config.php` — the same file that holds `DB_PASSWORD`:
+
+```php
+define('POSTHOG_PROJECT_TOKEN', 'phc_your_project_token_here');
+define('POSTHOG_HOST', 'https://us.i.posthog.com'); // optional, this is the default
+```
+
+Then drop `posthog-example/` into the install's `wp-content/plugins/` directory and activate it.
 
 ## What Gets Tracked
 
@@ -46,8 +51,7 @@ example-apps/wordpress/
 └── posthog-example/                # The plugin — copy this into wp-content/plugins/
     ├── posthog-example.php         # Plugin entry: init, client snippet, server capture
     ├── composer.json               # Pulls in posthog/posthog-php
-    ├── .env.example                # Environment variable template
-    └── .gitignore                  # Ignores vendor/, .env, composer.lock
+    └── .gitignore                  # Ignores vendor/, composer.lock
 ```
 
 ## Key Implementation Patterns
@@ -72,14 +76,14 @@ PostHog::init($token, [
 add_action('plugins_loaded', 'posthog_example_init');
 ```
 
-### 3. Client snippet on `wp_head`, token escaped
+### 3. Config from `wp-config.php`, snippet on `wp_head`, token escaped
 
 ```php
-$token = esc_js(getenv('POSTHOG_PROJECT_TOKEN'));
+$token = esc_js(posthog_example_token()); // reads the POSTHOG_PROJECT_TOKEN constant
 add_action('wp_head', 'posthog_example_client_snippet', 999);
 ```
 
-Never echo a raw token into markup. Priority 999 keeps the snippet late in `<head>`.
+The token lives in `wp-config.php`, never in plugin source. Never echo a raw token into markup. Priority 999 keeps the snippet late in `<head>`.
 
 ### 4. Server-side capture on a real WordPress action
 
@@ -103,13 +107,13 @@ A web request has no single exit point like a CLI script does, so flush where yo
 
 ## Running Without PostHog
 
-The plugin works fine without PostHog configured. If `POSTHOG_PROJECT_TOKEN` is missing — or still holds the `phc_your_...` placeholder — the plugin skips initialization, prints no snippet, and captures nothing. WordPress is unaffected.
+The plugin works fine without PostHog configured. If the `POSTHOG_PROJECT_TOKEN` constant is undefined — or still holds the `phc_your_...` placeholder — the plugin skips initialization, prints no snippet, and captures nothing. WordPress is unaffected.
 
 ## Next Steps
 
 - Track another WordPress action: `user_register`, `publish_post`, or `woocommerce_thankyou`
 - Identify logged-in users with `PostHog::identify(...)` instead of the hashed anonymous id
-- Read the token from a `wp-config.php` constant or a WordPress option instead of `.env`
+- Move the token to a WordPress option with a settings screen if the plugin should be configurable from wp-admin
 - Add feature flags — evaluate them client-side if the site sits behind full-page caching
 
 ## Learn More
