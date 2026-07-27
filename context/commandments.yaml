@@ -157,6 +157,7 @@ commandments:
     - Create a dedicated PostHogService class in app/Services/ - do NOT scatter PostHog::capture calls throughout controllers
     - Register PostHog configuration in config/posthog.php using env() for all settings (api_key, host, disabled)
     - Do NOT use Laravel's event system or observers for analytics - call capture explicitly where actions occur
+    - Call PostHog::flush() after capture in queue jobs, Horizon, and Octane - a long-running worker never destructs, so its events sit in the SDK buffer until batch_size (default 100) is reached and are silently lost on restart
 
   ruby:
     - "posthog-ruby is the Ruby SDK gem name (add `gem 'posthog-ruby'` to Gemfile) but require it with `require 'posthog'` (NOT `require 'posthog-ruby'`)"
