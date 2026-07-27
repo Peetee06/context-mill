@@ -298,7 +298,9 @@ function expandSkillGroups(config, configDir) {
         const compositeKeyDashed = key.replace(/\//g, '-');
 
         for (const variation of group.variants) {
-            const mergedTags = [...baseTags, ...(variation.tags || [])];
+            // Deduped: a variant that repeats a group-level tag would otherwise
+            // collect that tag's commandments twice.
+            const mergedTags = [...new Set([...baseTags, ...(variation.tags || [])])];
             let description = variation.description;
             if (!description && baseDescription) {
                 description = baseDescription.replace(/{display_name}/g, variation.display_name);
@@ -522,7 +524,9 @@ function collectCommandments(tags, commandmentsConfig) {
     // `all` is language-agnostic and ships with every skill, whatever its tags.
     const rules = [...(commandments.all || [])];
 
-    for (const tag of tags) {
+    // Deduped: variants inherit group-level tags and may re-declare them, which
+    // would otherwise collect that tag's rules twice.
+    for (const tag of new Set(tags)) {
         if (tag !== 'all' && commandments[tag]) {
             rules.push(...commandments[tag]);
         }

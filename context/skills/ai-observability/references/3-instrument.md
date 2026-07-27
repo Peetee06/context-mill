@@ -4,9 +4,16 @@ title: AI Observability Setup - Instrument
 description: Wire the mechanism chosen at the gate - wrapper client swap, OTel bootstrap, or manual capture
 ---
 
-Wire the mechanism you chose at the gate in `1-begin.md`. Only one of the three sections below applies — do not wire OTel for a wrapper-path run or vice versa.
+**The variant you installed determines the mechanism, and its installation doc is the source of truth** — copy the bootstrap from there rather than adapting a different variant's shape. The doc will describe one of four families:
 
-Whatever the mechanism, this step captures individual generations only. It does **not** build the session → trace → span tree — that is application-level work done in `4-nesting.md`, and it is a mandatory part of this skill, not optional polish.
+| Family | Who uses it | Shape |
+|---|---|---|
+| **OTel bootstrap** | most provider variants, and the gateway variants | `TracerProvider` + `PostHogSpanProcessor` + a provider instrumentor |
+| **PostHog wrapper client** | variants where `posthog.ai.*` / `@posthog/ai` ships a drop-in | swap the client constructor, no entry-point work |
+| **Framework hook** | agent frameworks and Vercel AI | the framework's own tracing processor, callback, or `experimental_telemetry` |
+| **Manual capture** | `manual-capture` | explicit `capture()` calls at the call site |
+
+Wire exactly one. Whatever the family, this step captures individual generations only — attaching the session id is `4-nesting.md`'s job, and it is a mandatory part of this skill, not optional polish.
 
 ## Environment variables (all mechanisms)
 
@@ -87,6 +94,10 @@ sdk.start()
 
 For Next.js / Nuxt / other frameworks that expose a dedicated startup hook (`instrumentation.ts`, `nuxt.config`'s server plugin, etc.), put the SDK init there. It must run once per process, not per request.
 
+### Agent frameworks — a tracing processor, not OTel
+
+Agent SDKs carry their own tracing layer, and the PostHog integration plugs into *that*. `openai-agents` and `claude-agent-sdk` register a processor rather than a `TracerProvider`; LangChain-family variants use a callback handler. Take the exact registration from the variant's install doc — wiring an OTel instrumentor underneath one of these captures the model calls but loses the agent, tool, and handoff structure that makes the framework worth instrumenting.
+
 ### Vercel AI SDK
 
 No instrumentor package. Initialize `NodeSDK` with just `PostHogSpanProcessor` (no `instrumentations` array), then pass `experimental_telemetry` per call:
@@ -133,7 +144,8 @@ Refer to `/docs/ai-observability/manual-capture` for the full property list.
 
 ## Do not
 
-- Do not wire more than one mechanism — the gate in `1-begin.md` chose exactly one.
+- Do not wire more than one mechanism — the variant's install doc describes exactly one.
+- Do not substitute an OTel instrumentor for a framework's own tracing hook. If the variant is an agent framework, its processor is the integration.
 - Do not create a PostHog client where one already exists — search first and reuse it (the frontend client is a singleton). Only a backend with no client creates one, once, at module level. Either way, reuse the project token / host already in the app's env — this is a separate exporter, not a separate PostHog install.
 - Do not put client or SDK init inside a request handler. Once per process, at module level or startup.
 - OTel path: do not import the vendor SDK above the OTel init in the same file — the instrumentor patches the SDK when it loads, so the order matters.

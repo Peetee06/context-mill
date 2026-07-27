@@ -1,10 +1,10 @@
 ---
 next_step: 3-instrument.md
 title: AI Observability Setup - Install
-description: Declare the packages for the mechanism chosen at the gate - wrapper, OTel, or manual capture
+description: Declare the packages the installed variant needs - OTel, wrapper, framework hook, or manual capture
 ---
 
-Declare the packages the mechanism chosen in `1-begin.md` needs in the project's manifest — and only those. Do not run the package manager here — the base integration's build/verify step (or the user) installs everything in one pass.
+Declare the packages the variant you installed in `1-begin.md` needs in the project's manifest — and only those. Do not run the package manager here — the base integration's build/verify step (or the user) installs everything in one pass.
 
 Read the manifest first. If any of the required packages is already declared, leave the existing version alone and say so. Match the style of dependencies already in the file (versions, ordering, dev vs. runtime).
 
@@ -70,6 +70,14 @@ No provider instrumentation package — Vercel AI emits OTel spans natively when
 @opentelemetry/resources
 ```
 
+### Gateway variants (Groq, OpenRouter, Together, Ollama, …)
+
+These use the `openai` SDK against a different host, so the packages are the OpenAI ones — `opentelemetry-instrumentation-openai-v2` (Python) or `@opentelemetry/instrumentation-openai` (Node). The variant differs in the install doc's configuration, not its dependencies. Do not go looking for a `opentelemetry-instrumentation-groq`.
+
+### Agent framework variants
+
+Framework variants generally need no OTel instrumentation package at all — the tracing hook ships in the framework or in `posthog` / `@posthog/ai`. Take the package list from the variant's install doc; do not assume the three-package OTel shape above applies.
+
 ### Manual-capture path
 
 No OTel packages. Just PostHog core:
@@ -86,4 +94,4 @@ If PostHog core is already installed (it should be — see `1-begin.md`), this f
 - Do not run `npm install` / `pip install` here.
 - Do not edit the lockfile.
 - Do not upgrade the vendor SDK.
-- Do not add packages for more than one mechanism — no OTel instrumentation packages on a wrapper-path run, and vice versa. The gate in `1-begin.md` picked exactly one.
+- Do not add packages for more than one mechanism — no OTel instrumentation packages on a wrapper-path run, and vice versa. The variant's install doc describes exactly one.

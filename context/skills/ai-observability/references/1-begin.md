@@ -1,72 +1,96 @@
 ---
 next_step: 2-install.md
 title: AI Observability Setup - Begin
-description: Pick the right variant, locate the LLM call sites, map the app's session/trace/span structure, and choose the instrumentation mechanism before editing
+description: Pick the right variant from the full catalog, locate the LLM call sites, and answer the two questions that drive the whole integration
 ---
 
-Before touching any code, decide which variant of this skill to install, confirm the two prerequisites, and get a read on where in the project LLM calls actually happen. AI Observability instruments an existing setup — if the setup isn't there, this skill can't do its job.
+Before touching any code, decide which variant of this skill to install, confirm the prerequisites, and get a read on where in the project LLM calls actually happen. AI Observability instruments an existing setup — if the setup isn't there, this skill can't do its job.
 
 ## Pick the variant
 
-The `ai-observability` skill has one variant per LLM provider × language (e.g. `ai-observability-openai-python`, `ai-observability-anthropic-node`, …). You are running the group-level entry; before installing, pick the specific variant that matches this project.
+This skill ships **68 variants** — one per (provider × language), plus agent frameworks, gateways, and a manual fallback. You are running the group-level entry. Call `load_skill_menu` with `category: "ai-observability"` and treat that list as the source of truth; the families below tell you what to look for in the project.
 
-Scan the manifest (`package.json`, `pyproject.toml`, `requirements.txt`, `Gemfile`) for a vendor LLM package. Typical package names:
+Apply these rules **in order**. The first match wins — the order matters, because frameworks wrap providers and gateways impersonate them.
 
-- OpenAI — `openai`
-- Anthropic — `@anthropic-ai/sdk` (Node) or `anthropic` (Python)
-- LangChain — `langchain` / `@langchain/core` (plus a provider adapter like `langchain-openai` / `@langchain/openai`)
-- Vercel AI SDK — `ai` (plus a provider like `@ai-sdk/openai`)
-- Google Gemini — `google-genai` (Python) or `@google/genai` (Node)
+### 1. An agent or orchestration framework → use its variant, not the provider's
 
-Decision rules — apply in order:
+These wrap the provider SDK. Instrumenting the provider underneath captures the model calls but loses the framework's own structure (tool spans, handoffs, agent steps), and on some of them the provider instrumentor captures nothing at all.
 
-1. **Exactly one vendor SDK found** → pick the corresponding variant. Language follows the manifest (`package.json` → Node, `pyproject.toml`/`requirements.txt` → Python). Tell the user which variant you picked and why in a `[STATUS]` line, then call `install_skill` with the full variant id (e.g. `ai-observability-openai-python`).
-2. **Multiple vendor SDKs found** (e.g. LangChain wraps OpenAI, so both may be declared) → prefer the higher-level abstraction: LangChain > direct provider SDK. If still ambiguous, use `wizard_ask` to have the user pick, listing the candidates as options.
-3. **No vendor SDK found** → install `ai-observability-manual-capture`. This variant posts `$ai_generation` events explicitly and works without any auto-instrumentation.
-4. **You're not sure** → `wizard_ask` the user with a multi-choice picker listing every provider you have a variant for. Do not guess when there's real ambiguity.
+| Package in the manifest | Variant |
+|---|---|
+| `openai-agents` | `openai-agents` |
+| `claude-agent-sdk` | `claude-agent-sdk` |
+| `langchain`, `@langchain/core` | `langchain-{python,node}` |
+| `langgraph`, `@langchain/langgraph` | `langgraph-{python,node}` |
+| `ai` (Vercel AI SDK) | `vercel-ai` |
+| `llama-index`, `llamaindex` | `llamaindex` |
+| `crewai` | `crewai` |
+| `pyautogen`, `autogen-agentchat` | `autogen` |
+| `dspy` / `dspy-ai` | `dspy` |
+| `pydantic-ai` | `pydantic-ai` |
+| `semantic-kernel` | `semantic-kernel` |
+| `smolagents` | `smolagents` |
+| `mirascope` | `mirascope` |
+| `instructor` | `instructor-{python,node}` |
+| `litellm` | `litellm` |
+| `mastra`, `@mastra/core` | `mastra` |
+| `convex` | `convex` |
+
+### 2. A provider SDK with a `baseURL` / `base_url` override → use the gateway's variant
+
+Most OpenAI-compatible providers ship no SDK of their own; apps talk to them with the `openai` package pointed at a different host. **Routing these to `openai-*` is a silent, costly misroute** — generations get attributed to the wrong provider and cost calculation breaks.
+
+So whenever you find an `openai` client, grep its construction for `baseURL` / `base_url` (also check `OPENAI_BASE_URL` in env files) and match the host:
+
+| Host contains | Variant |
+|---|---|
+| `api.groq.com` | `groq-{python,node}` |
+| `openrouter.ai` | `openrouter-{python,node}` |
+| `api.together.` | `together-ai-{python,node}` |
+| `localhost:11434`, `ollama` | `ollama-{python,node}` |
+| `api.deepseek.com` | `deepseek-{python,node}` |
+| `api.x.ai` | `xai-{python,node}` |
+| `api.perplexity.ai` | `perplexity-{python,node}` |
+| `api.fireworks.ai` | `fireworks-ai-{python,node}` |
+| `api.cerebras.ai` | `cerebras-{python,node}` |
+| `huggingface.co` | `hugging-face-{python,node}` |
+| `dedaluslabs.ai` | `dedalus-{python,node}` |
+| `api.portkey.ai` | `portkey-{python,node}` |
+| `helicone.ai` | `helicone-{python,node}` |
+| `gateway.ai.cloudflare.com` | `cloudflare-ai-gateway-{python,node}` |
+| `.openai.azure.com` | `azure-openai-{python,node}` |
+
+An unfamiliar host still means "not plain OpenAI" — check the menu for a variant naming that provider before falling back.
+
+### 3. A direct provider SDK, no override → that provider's variant
+
+`openai` → `openai-*`; `anthropic` / `@anthropic-ai/sdk` → `anthropic-*`; `google-genai` / `@google/genai` → `google-*`; `mistralai` → `mistral-*`; `cohere` → `cohere-*`; `boto3` + `bedrock-runtime` → `aws-bedrock-*`.
+
+### 4. Everything else
+
+- **Several candidates and no framework** → prefer the higher-level abstraction; if still ambiguous, `wizard_ask` the user with the candidates as options.
+- **The app already emits OTel spans for its LLM calls itself** → `opentelemetry-{python,node}`.
+- **No LLM SDK at all** → `ai-observability-manual-capture`, which posts events explicitly.
+- **Genuinely unsure** → `wizard_ask` with a multi-choice picker. Do not guess when there's real ambiguity.
+
+Language follows the manifest (`package.json` → Node, `pyproject.toml`/`requirements.txt` → Python); framework-only variants have no language suffix. Tell the user which variant you picked **and why** in a `[STATUS]` line, then call `install_skill` with the full id (e.g. `ai-observability-groq-node`).
 
 ## Check for an existing PostHog setup (informational — not a blocker)
 
-Grep the project for one of:
+Grep for `posthog.init(`, `PostHog(`, or `AddPostHog(`.
 
-- `posthog.init(` — most JS/TS SDKs
-- `PostHog(` — Python, Ruby, Go SDK constructors
-- `AddPostHog(` — .NET DI registration
-
-**This is not a prerequisite.** The OTel-based variants use `PostHogSpanProcessor`, a self-contained exporter that just takes an API key + host — it does not depend on a `posthog.init(...)` call anywhere. The `manual-capture` variant uses `posthog.capture(...)`, which needs the traditional SDK, but the install step will add it if it isn't there.
-
-If a `posthog.init(...)` (or equivalent) **is** already present, note the env-var names it reads (`POSTHOG_API_KEY`, `NEXT_PUBLIC_POSTHOG_KEY`, etc.) and reuse them in `3-instrument.md` — don't invent parallel names. If nothing is there, `3-instrument.md` will set fresh values via `set_env_values`.
+**This is not a prerequisite.** The OTel-based variants use `PostHogSpanProcessor`, a self-contained exporter taking an API key + host — it does not depend on a `posthog.init(...)` anywhere. If one **is** present, note the env-var names it reads (`POSTHOG_API_KEY`, `NEXT_PUBLIC_POSTHOG_KEY`, …) and reuse them in `3-instrument.md`; don't invent parallel names.
 
 ## Locate the LLM call sites
 
-Grep for where the vendor SDK is imported and called. This is not a full analysis — one or two representative sites is enough for you to reason about where OTel initialization has to run before those calls execute:
+Grep for where the chosen SDK is imported and called — one or two representative sites is enough to reason about where init has to run. Note the app's **entry point** (server startup file, `main.py`, `index.ts`, `instrumentation.ts` in Next.js): on the OTel path, init must run there *before* the vendor SDK is imported.
 
-- OpenAI: `import OpenAI`, `openai.OpenAI(`, `new OpenAI(`
-- Anthropic: `Anthropic(`, `new Anthropic(`
-- LangChain: `ChatOpenAI(`, `from langchain`, `import { ChatOpenAI } from '@langchain/openai'`
-- Vercel AI: `generateText(`, `streamText(`, `import ... from 'ai'`
-- Google Gemini: `genai.Client(`, `new GoogleGenerativeAI(`
+## Answer the two questions
 
-Note the app's entry point (server startup file, `main.py`, `index.ts`, `instrumentation.ts` in Next.js, etc.) — on the OTel path, init must run there *before* the vendor SDK is imported; the wrapper path edits the call sites instead.
+Instrumentation captures individual LLM calls. The structure that makes them useful comes from application semantics only the code can tell you — and it reduces to two questions. Write the answers down; `4-nesting.md` consumes them and nothing else.
 
-## Map the logical structure
+**1. Does the app register tools with its LLM calls?** Look for a `tools=` / `tools:` argument, a tool registry, or a framework's tool decorator. This decides whether the trace should contain spans at all — you never author them by hand, so the answer is "which spans should already be there", not "which should I add".
 
-Instrumentation captures individual LLM calls; the *tree* that makes them useful — session → trace → span → generation — comes from application semantics only the code can tell you. Answer these four questions now, from the code, and write the answers down; `4-nesting.md` consumes them:
+**2. What identifies one conversation, and does it vary within the process?** A `thread_id` / `conversationId` field, a session row, a request parameter — or nothing explicit, in which case the process run *is* the conversation. Whether it varies per request decides **where** the session id has to live: a server handling many users' threads needs it per call; a CLI or worker can set it once at startup.
 
-- **What is one session here?** The unit of conversation — a conversation object, a thread id, a workflow run. Some apps have none; that's a valid answer.
-- **What is one trace?** The unit of request — typically a request handler or the top-level function that may make several model calls to produce one result.
-- **Which non-LLM steps deserve spans?** Retrieval, tool calls, validation — steps between model calls worth seeing in the trace.
-- **What is the distinct-id source?** A `user_id` in scope at the call sites? None → events will be anonymous; note that too.
-
-## Choose the mechanism
-
-There are three ways to instrument: a **PostHog wrapper client** (per-call params), **OTel auto-instrumentation** (bootstrap + enclosing spans), and **manual capture** (explicit events). Do not default to OTel — pick from this gate, in order, using the variant and the structure map above:
-
-1. **App already runs OpenTelemetry**, or its spans must also fan out to non-PostHog backends → **OTel**.
-2. **Variant has a PostHog wrapper client** — Python `posthog` ships `posthog.ai.{openai,anthropic,gemini,langchain,openai_agents,claude_agent_sdk}`; Node `@posthog/ai` ships `{openai,anthropic,gemini,vercel}` — → **wrapper**. Simplest path, and the only one that handles per-request user/conversation identity without extra machinery.
-3. **Anything else** (most provider variants have no wrapper) → **OTel**.
-4. **No vendor SDK at all** → you already picked the `manual-capture` variant above → **manual capture**.
-
-Record the choice — `2-install.md` and `3-instrument.md` branch on it. If the chosen mechanism's imports fail in the project's environment at verification time, come back to this gate and take the next viable path; do not ship non-running code.
-
-Do not edit yet. Once you have the entry point, the call sites, the structure map, and the mechanism, move on to `2-install.md`.
+Do not edit yet. Once you have the variant, the entry point, the call sites, and those two answers, move on to `2-install.md`.
