@@ -17,7 +17,7 @@ Read every referenced file **before editing**. Then work through them in order:
 1. **Begin** — see `references/1-begin.md`. Pick the right variant using the ordered rules (framework before provider, gateway `baseURL` before the SDK it borrows), locate the LLM call sites, and answer the two questions that drive everything after: does the app register tools, and what identifies one conversation?
 2. **Install** — see `references/2-install.md`. Declare the variant's packages in the manifest — and only those.
 3. **Instrument** — see `references/3-instrument.md`. Wire the bootstrap the variant's install doc describes: OTel `TracerProvider` + `PostHogSpanProcessor`, a PostHog wrapper client, a framework tracing hook, or manual capture. Route the project token / host through environment variables.
-4. **Attach the session** — see `references/4-nesting.md`. Give the traces that belong to one conversation a shared `$ai_session_id`. Mandatory. Spans are *not* your job — they come from the app's own tool registration.
+4. **Attach identity** — see `references/4-nesting.md`. Give the traces that belong to one conversation a shared `$ai_session_id`, and attribute them to a person with the distinct id. Mandatory. Spans are *not* your job — they come from the app's own tool registration.
 5. **Verify** — see `references/5-verify.md`. Describe a request the user can trigger, and grade what lands in PostHog — one session, grouped traces, right attribution — rather than what the diff contains.
 
 ## Reference files

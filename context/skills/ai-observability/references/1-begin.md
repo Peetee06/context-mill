@@ -36,31 +36,11 @@ These wrap the provider SDK. Instrumenting the provider underneath captures the 
 | `mastra`, `@mastra/core` | `mastra` |
 | `convex` | `convex` |
 
-### 2. A provider SDK with a `baseURL` / `base_url` override → use the gateway's variant
+### 2. A provider SDK with a `baseURL` / `base_url` override → prefer the gateway's variant
 
-Most OpenAI-compatible providers ship no SDK of their own; apps talk to them with the `openai` package pointed at a different host. **Routing these to `openai-*` is a silent, costly misroute** — generations get attributed to the wrong provider and cost calculation breaks.
+Most OpenAI-compatible providers ship no SDK of their own; apps reach them with the `openai` package pointed at another host — `api.groq.com`, `openrouter.ai`, `localhost:11434`, `api.together.xyz`, and so on. Check the `openai` client's construction and `OPENAI_BASE_URL` in env files, then pick the variant naming that provider from the menu.
 
-So whenever you find an `openai` client, grep its construction for `baseURL` / `base_url` (also check `OPENAI_BASE_URL` in env files) and match the host:
-
-| Host contains | Variant |
-|---|---|
-| `api.groq.com` | `groq-{python,node}` |
-| `openrouter.ai` | `openrouter-{python,node}` |
-| `api.together.` | `together-ai-{python,node}` |
-| `localhost:11434`, `ollama` | `ollama-{python,node}` |
-| `api.deepseek.com` | `deepseek-{python,node}` |
-| `api.x.ai` | `xai-{python,node}` |
-| `api.perplexity.ai` | `perplexity-{python,node}` |
-| `api.fireworks.ai` | `fireworks-ai-{python,node}` |
-| `api.cerebras.ai` | `cerebras-{python,node}` |
-| `huggingface.co` | `hugging-face-{python,node}` |
-| `dedaluslabs.ai` | `dedalus-{python,node}` |
-| `api.portkey.ai` | `portkey-{python,node}` |
-| `helicone.ai` | `helicone-{python,node}` |
-| `gateway.ai.cloudflare.com` | `cloudflare-ai-gateway-{python,node}` |
-| `.openai.azure.com` | `azure-openai-{python,node}` |
-
-An unfamiliar host still means "not plain OpenAI" — check the menu for a variant naming that provider before falling back.
+Keep the stakes straight: these variants instrument **identically** — same packages, same `OpenAIInstrumentor`, same bootstrap. Choosing the matching one gets the provider named correctly in the report and the run record; it does not generate different code. If the host matches no variant you can find, `openai-*` produces the same result. One real exception: **Portkey** additionally needs the `portkey-ai` package.
 
 ### 3. A direct provider SDK, no override → that provider's variant
 
@@ -91,6 +71,8 @@ Instrumentation captures individual LLM calls. The structure that makes them use
 
 **1. Does the app register tools with its LLM calls?** Look for a `tools=` / `tools:` argument, a tool registry, or a framework's tool decorator. This decides whether the trace should contain spans at all — you never author them by hand, so the answer is "which spans should already be there", not "which should I add".
 
-**2. What identifies one conversation, and does it vary within the process?** A `thread_id` / `conversationId` field, a session row, a request parameter — or nothing explicit, in which case the process run *is* the conversation. Whether it varies per request decides **where** the session id has to live: a server handling many users' threads needs it per call; a CLI or worker can set it once at startup.
+**2. What identifies the conversation and the user, and do they vary within the process?** For the conversation: a `thread_id` / `conversationId` field, a session row, a request parameter — or nothing explicit, in which case the process run *is* the conversation. For the user: a `user_id` or equivalent in scope at the call sites — or none, in which case events are anonymous. Note that rather than inventing an identifier.
+
+Both answers share one consequence, which is why they're one question: whether they vary per request decides **where** they have to live. A server handling many users' threads sets both per call; a CLI or worker sets them once at startup.
 
 Do not edit yet. Once you have the variant, the entry point, the call sites, and those two answers, move on to `2-install.md`.

@@ -72,7 +72,7 @@ No provider instrumentation package — Vercel AI emits OTel spans natively when
 
 ### Gateway variants (Groq, OpenRouter, Together, Ollama, …)
 
-These use the `openai` SDK against a different host, so the packages are the OpenAI ones — `opentelemetry-instrumentation-openai-v2` (Python) or `@opentelemetry/instrumentation-openai` (Node). The variant differs in the install doc's configuration, not its dependencies. Do not go looking for a `opentelemetry-instrumentation-groq`.
+These use the `openai` SDK against a different host, so the packages are the OpenAI ones — `opentelemetry-instrumentation-openai-v2` (Python) or `@opentelemetry/instrumentation-openai` (Node). There is no per-gateway instrumentation package. The one exception is Portkey, which also needs `portkey-ai`.
 
 ### Agent framework variants
 

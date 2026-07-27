@@ -25,18 +25,20 @@ Which layers actually emit tool spans, so you know what to expect at verificatio
 
 The last row is the one that surprises people. An OTel instrumentor patches only the vendor SDK's own methods (`Messages.create`, `chat.completions.create`, …). A tool the app executes in its own loop never passes through it, so it produces no span; the model's *request* to call that tool is recorded as attributes on the generation (`gen_ai.prompt.N.tool_calls.M.name`), not as a child. On this path a tool-using app still yields a generations-only trace — expected, not a defect to fix.
 
-## Rule 2 — your job is the bootstrap plus the session id
+## Rule 2 — your job is the bootstrap plus identity
 
-The bootstrap is done. Trace grouping is not a separate task: it falls out of the framework's own call structure, because the calls a request makes already share one OTel trace (or one framework run). So the only application semantics left to supply is the **session** — because only the app knows what a conversation is.
+The bootstrap is done. Trace grouping is not a separate task: it falls out of the framework's own call structure, because the calls a request makes already share one OTel trace (or one framework run). What's left is the two things only the app can tell you — **which conversation these traces belong to** (`$ai_session_id`) and **who the person is** (the distinct id). Wire both; an unattributed trace is only half-instrumented.
 
-### Where `$ai_session_id` goes
+### Where the session id and distinct id go
 
-Use the second answer from `1-begin.md`:
+They follow the same rule, so place them together, using the second answer from `1-begin.md`:
 
-| Case | Where it goes |
+| Case | Where they go |
 |---|---|
-| One process = one conversation (CLI, script, worker) | OTel **Resource** attribute, beside `posthog.distinct_id` |
-| Session varies per request (any server) | **Per call** — the wrapper's `posthog_properties` / `posthogProperties`, Vercel AI's `experimental_telemetry.metadata`, or manual-capture properties |
+| One process = one conversation and one user (CLI, script, worker) | OTel **Resource** attributes — `$ai_session_id` and `posthog.distinct_id` side by side |
+| Either varies per request (any server) | **Per call** — the wrapper's `posthog_distinct_id` + `posthog_properties` / `posthogProperties`, Vercel AI's `experimental_telemetry.metadata`, or manual-capture properties |
+
+If the app has no user identifier at all, leave the distinct id unset and say so in the report — anonymous is a finding, not a blocker. Never invent one, and never substitute the session id for it.
 
 ```python
 resource=Resource(attributes={
