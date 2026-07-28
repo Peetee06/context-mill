@@ -7,7 +7,7 @@ effort_pi: low
 model_sdk: claude-sonnet-4-6
 effort_sdk: high
 skills: [integration-v2-error-tracking-step, posthog-best-practices]
-allowedTools: [Read, Write, Edit, Glob, Grep]
+allowedTools: [Read, Write, Edit, Glob, Grep, Bash]
 disallowedTools: [enqueue_task]
 dependsOn: [install, init]
 ---
