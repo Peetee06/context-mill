@@ -18,7 +18,7 @@ Emit:
 
 ## Tools
 
-Reach `products-enable` through the PostHog `exec` tool (`info products-enable`, then `call products-enable <json>`).
+Reach `products-enable` through the PostHog `exec` tool (`info products-enable`, then `call products-enable <json>`). Some deploys don't expose it yet — if `info` says the tool is unknown, one `search enable` to confirm, then take the missing-tool path in step 1. Don't keep searching for it under other names.
 
 ## Do
 
@@ -29,6 +29,8 @@ Reach `products-enable` through the PostHog `exec` tool (`info products-enable`,
 ```
 
    It is idempotent and server-owned — the response is `{ "results": { <product>: "enabled" | "already_enabled" } }`. The run prompt's "Project state read at auth time" block tells you which are already ON, so you can leave those out (re-sending is harmless either way). Record the per-product result — the report lists it.
+
+   **If the tool is missing from the MCP** (see Tools), don't abort: record a follow-up telling the user to switch the three products on in PostHog — Settings → Session replay ("Record user sessions"), Settings → Error tracking ("Enable exception autocapture"), and Support in the product sidebar — and continue.
 
    If the call is rejected for permissions (e.g. some of these need project admin the user lacks), don't abort: record a follow-up to enable them from a project-admin account, and continue. **A rejection here does not block the next step** — enabling a product (this step) and enabling its signal source (step 4) are independent calls, so step 4 still switches the sources on. They simply sit idle until the products are on, then pick up data with no re-setup.
 
