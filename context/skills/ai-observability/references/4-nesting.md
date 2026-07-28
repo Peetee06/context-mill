@@ -31,26 +31,33 @@ The bootstrap is done. Trace grouping is not a separate task: it falls out of th
 
 ### Where the session id and distinct id go
 
-They follow the same rule, so place them together, using the second answer from `1-begin.md`:
+They follow the same rule, so place them together. **Prefer per-call whenever the mechanism offers it** — per-call identity keeps the bootstrap a literal copy of the install doc, and it stays correct when the app later serves more than one user per process.
 
-| Case | Where they go |
+| Mechanism | Where identity goes |
 |---|---|
-| One process = one conversation and one user (CLI, script, worker) | OTel **Resource** attributes — `$ai_session_id` and `posthog.distinct_id` side by side |
-| Either varies per request (any server) | **Per call** — the wrapper's `posthog_distinct_id` + `posthog_properties` / `posthogProperties`, Vercel AI's `experimental_telemetry.metadata`, or manual-capture properties |
+| Wrapper client | **Per call** — `posthog_distinct_id` and `posthog_properties={"$ai_session_id": …}` (camelCase in Node) |
+| Vercel AI SDK | **Per call** — `experimental_telemetry.metadata` |
+| Manual capture | **Per call** — event properties |
+| Framework hook | Per call if the framework exposes metadata; otherwise the Resource |
+| Raw provider SDK + OTel instrumentor | **Resource attributes only** — see below |
 
-If the app has no user identifier at all, leave the distinct id unset and say so in the report — anonymous is a finding, not a blocker. Never invent one, and never substitute the session id for it.
+The last row is a real constraint, not a preference. The instrumentor creates the generation span itself, so you cannot pass it per-call metadata, and OTel does not inherit attributes parent→child — putting them on an enclosing span leaves the generation without them. `$ai_session_id` and `posthog.distinct_id` go on the Resource, beside `SERVICE_NAME`, exactly as the install doc shows for `posthog.distinct_id`:
 
 ```python
 resource=Resource(attributes={
     SERVICE_NAME: "my-app",
-    "posthog.distinct_id": user_id,      # already in the install docs
-    "$ai_session_id": session_id,        # add this line; process-global
+    "posthog.distinct_id": USER_ID,      # the doc already shows this one
+    "$ai_session_id": SESSION_ID,        # add this line
 })
 ```
 
-The key is the literal `$ai_session_id` — there is no `posthog.session_id` alias (only `posthog.distinct_id` and `posthog.geoip_disable` get remapped at ingest). Resource attributes are copied onto every event, filtered only by the `host.` / `process.` / `os.` / `telemetry.` prefixes.
+Because the Resource is built once at import, both values must be resolvable at module scope. **When they are** — a CLI, a script, a worker, one process serving one user — this is correct and costs two lines. **When they aren't**, the fix is to choose a mechanism with per-call identity (usually the wrapper variant), *not* to defer the bootstrap into an init function so it can receive them. A per-request session on the Resource is wrong regardless: it is global to the process, so every conversation collapses into one id.
 
-**Never put a per-request session on the Resource** — the Resource is global to the SDK instance, so every conversation in the process would collapse into one id. If an app must stay on OTel *and* needs per-request values, use the standard `opentelemetry-processor-baggage` package; do not generate custom `SpanProcessor` classes in user codebases.
+If an app must stay on the raw OTel path *and* needs per-request values, use the standard `opentelemetry-processor-baggage` package; do not generate custom `SpanProcessor` classes in user codebases.
+
+If the app has no user identifier at all, leave the distinct id unset and say so in the report — anonymous is a finding, not a blocker. Never invent one, and never substitute the session id for it.
+
+Two details that bite either way: the key is the literal `$ai_session_id` (there is no `posthog.session_id` alias — only `posthog.distinct_id` and `posthog.geoip_disable` are remapped at ingest), and its value may contain only letters, numbers, and `- _ ~ . @ ( ) ! ' : |`. A raw thread id carrying a `/` or `#` is rejected, so check the app's identifier before passing it straight through.
 
 ### Always set a session — the graded property is cardinality
 

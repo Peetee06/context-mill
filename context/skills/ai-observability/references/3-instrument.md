@@ -13,7 +13,17 @@ description: Wire the mechanism chosen at the gate - wrapper client swap, OTel b
 | **Framework hook** | agent frameworks and Vercel AI | the framework's own tracing processor, callback, or `experimental_telemetry` |
 | **Manual capture** | `manual-capture` | explicit `capture()` calls at the call site |
 
-Wire exactly one. Whatever the family, this step captures individual generations only — attaching the session id is `4-nesting.md`'s job, and it is a mandatory part of this skill, not optional polish.
+Wire exactly one. Whatever the family, this step captures individual generations only — attaching identity is `4-nesting.md`'s job, and it is a mandatory part of this skill, not optional polish.
+
+## Match the doc's shape
+
+**Copy the install doc's code block and change only the values.** The bootstrap belongs at module level in the entry point, laid out the way the doc lays it out — typically under ten lines. Adding structure around it is the most common way this step goes wrong:
+
+- **No init function.** Don't wrap the bootstrap in `init_observability(...)` or similar. The doc calls it at import time; so should you.
+- **No module-level globals** holding the provider or tracer "for later". Nothing needs to reach them afterwards.
+- **No extra env-var scaffolding.** Read the values the way the doc reads them. `os.environ["POSTHOG_API_KEY"]` already fails loudly and idiomatically when unset — a separate presence check that raises is duplicated ceremony around a five-line snippet.
+
+If a value the bootstrap needs isn't available at module scope — a user id or conversation id that only exists per request — **do not defer the bootstrap into a function to reach it.** That is the signal that this app needs per-call identity instead of process-level identity; `4-nesting.md` covers what to do, and the answer is never to restructure the bootstrap.
 
 ## Environment variables (all mechanisms)
 
