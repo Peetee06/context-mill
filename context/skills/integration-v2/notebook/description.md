@@ -8,37 +8,39 @@ First `Read` the finished `posthog-setup-report.md` (don't reconstruct it from
 memory, and don't read it before the report step has written it). Then create the
 notebook in a single `notebooks-create` call through `posthog_exec` — that exact
 tool name, no tool search — with a `title` and `content` that wraps the report in
-one `ph-markdown-notebook` node:
+one `ph-markdown-notebook` node.
 
-```json
-{
-  "title": "PostHog setup (wizard) – <repo name>",
-  "content": { "type": "doc", "content": [
-    { "type": "ph-markdown-notebook", "attrs": { "nodeId": "markdown-notebook-v2", "markdown": "<report contents>" } }
-  ]}
-}
+The exec command is `call notebooks-create` followed by the bare JSON argument —
+no quotes around it, and the whole argument on one line with the report's
+newlines and quotes escaped as normal JSON string encoding (`\n`, `\"`, `\\`):
+
+```
+call notebooks-create {"title": "PostHog setup (wizard) – acme-shop", "content": {"type": "doc", "content": [{"type": "ph-markdown-notebook", "attrs": {"nodeId": "markdown-notebook-v2", "markdown": "# PostHog setup report\n\n## Events captured\n\n| Event | Where |\n|---|---|\n| `user_signed_up` | `src/auth.ts` |\n\nInitialized with \"capture_exceptions: true\" in `src/posthog.ts`.\n"}}]}}
 ```
 
-The report goes in verbatim, but `markdown` is a JSON string field: build the
-whole argument as one valid JSON value so the report's newlines and quotes are
-escaped as normal JSON string encoding (`\n`, `\"`, `\\`). Never paste raw
-multi-line text into the JSON — a literal newline inside the string fails with
-"Bad control character". And `exec` is not a shell: pass the JSON bare, never
-wrapped in quotes — `call notebooks-create '{...}'` fails with "Unexpected
-token" because the quotes reach the JSON parser.
+Wrong, and their exact errors:
 
-A rejected call is one of those two mistakes far more often than it is size —
-a full multi-page report goes through in one call when encoded correctly, so
-fix the encoding first and never trim the report just to make it parse. Only
-when correctly-encoded content still fails, split the transport: create the
-notebook with the first sections, then send the rest with
-`notebooks-partial-update` (same `posthog_exec`), passing the `short_id` **and
-the `version` from the create response** (`0` on a fresh notebook) plus the
-full `content` doc with the remaining `ph-markdown-notebook` nodes appended.
-Content updates without a matching `version` are rejected with a 409 "Someone
-else edited the Notebook" — that error means your `version` is missing or
-stale, not that the payload is malformed; `notebooks-retrieve` the current one
-(each successful update increments it) and resend.
+```
+call notebooks-create '{"title": ...}'      → "Unexpected token" (quotes reach the JSON parser)
+call notebooks-create {"...": "line one
+line two"}                                  → "Bad control character" (literal newline in a JSON string)
+```
+
+A full multi-page report goes through in one call when encoded this way — never
+trim the report just to make it parse. If a correctly-encoded payload still
+fails, split the transport: create the notebook with the first sections, then
+append the rest with `notebooks-partial-update`, passing the `short_id` and
+`version` from the create response (`0` on a fresh notebook; each successful
+update increments it) and the full `content` doc with the remaining
+`ph-markdown-notebook` nodes appended:
+
+```
+call notebooks-partial-update {"short_id": "AbCdEfGh", "version": 0, "content": {"type": "doc", "content": [{"type": "ph-markdown-notebook", "attrs": {"nodeId": "markdown-notebook-v2", "markdown": "<sections already sent>"}}, {"type": "ph-markdown-notebook", "attrs": {"nodeId": "markdown-notebook-v2-part2", "markdown": "<remaining sections>"}}]}}
+```
+
+`version` is required on every content update — a 409 "Someone else edited the
+Notebook" means it is missing or stale (fetch the current one with
+`notebooks-retrieve` and resend), not that the payload is malformed.
 The reader still gets the whole report; only the transport is split. Either way
 the file at the project root stays complete.
 
