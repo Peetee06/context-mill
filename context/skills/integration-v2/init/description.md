@@ -10,8 +10,8 @@ Use the framework's public env-var convention so the client can read them.
 - the public project token
 - the PostHog host
 
-One exception, matching the commandments: where a build genuinely has no
-environment to read from (iOS/Android release and archive builds), embed the
+Where a build genuinely has no valid environment to read from, often
+mobile projects, (iOS/Android release and archive builds), embed the
 real public token in the config the build ships — never an empty string or
 placeholder. Env-based configuration still covers development and any build
 that can read the environment.
