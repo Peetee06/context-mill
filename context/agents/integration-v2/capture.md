@@ -47,3 +47,5 @@ user the way the identify docs describe, not the event.
 The meaningful user actions across the app have capture calls that fire on the
 real action, not on page load, each one attributable to the user who took it, and
 `.posthog-wizard-cache/.posthog-events.json` lists the events you instrumented.
+
+You do not run builds, linters, or tests — the review task verifies the whole integration after you; your edits just need to be right by reading.

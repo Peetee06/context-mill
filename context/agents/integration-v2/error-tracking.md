@@ -31,6 +31,6 @@ this project's directory and set up that one place; that is the whole job.
 ## How you know you succeeded
 
 An error the app does not catch reaches PostHog, through the mechanism this SDK
-gives you rather than one you invented. You did not install anything, run a build
-or tests, search outside the project, or read through the whole app or hand-wrap
+gives you rather than one you invented. You did not install anything, run a build,
+lint, or tests (the review task verifies after you), search outside the project, or read through the whole app or hand-wrap
 individual components or routes.
