@@ -29,12 +29,39 @@ Load `wizard_ask` via `ToolSearch select:mcp__wizard-tools__wizard_ask`. Reach `
 
 ## Do
 
-1. Ask **once**, multi-select. **"None of these" is the first option** (the safe default — an accidental `enter` declines); order the *tools* after it, seeding with any step-2 hints so a tool you saw evidence of comes first among them:
+1. **Build a short list from the codebase scan, then ask once.** The full catalog is ~36 tools — too many to show at once. The run prompt carries a **"Tools detected in this codebase"** block (a deterministic dependency + env-key scan the wizard ran on this project). Use it to keep the first ask short:
+
+   - **Detected tools first.** From that block, take every tool whose `source_type` matches an entry in the connected-tools catalog (the `source_type` list in step 2 — e.g. detected `Sentry` → Sentry, `Github` → GitHub Issues). Ignore detected sources that are **not** in the catalog (Postgres, Stripe, …) — those belong to step 4, not this ask. List these first, right after "None of these". If the run prompt carries no detected block (older wizard), fall back to any step-2 evidence for ordering.
+   - **Then the SaaS basics** — always offer GitHub Issues, Linear, Jira, Sentry, and Zendesk even when the scan didn't flag them; skip any already added above.
+   - **Then "Something else…"** — a final `show-more` option that opens the full catalog.
+
+   If the detected block found nothing, the list is just the SaaS basics + "Something else…". **"None of these" stays the first option** (an accidental `enter` declines). Example shape (detected tools spliced in between "None of these" and the basics):
 
 ```
 {
   id: "connected-tools",
   prompt: "Self-driving can also watch your other tools and investigate and fix the problems they surface. Which of these do you use?",
+  kind: "multi",
+  options: [
+    { label: "None of these", value: "none" },
+    { label: "GitHub Issues", value: "github-issues" },
+    { label: "Linear", value: "linear" },
+    { label: "Jira", value: "jira" },
+    { label: "Sentry", value: "sentry" },
+    { label: "Zendesk", value: "zendesk" },
+    { label: "Something else…", value: "show-more" }
+  ]
+}
+```
+
+1b. **Only if the user picked "Something else…"**, ask a second multi-select with the full catalog below, minus the tools already shown in the first ask. Merge both answers into one picked set and drop the `show-more` sentinel — it is not a tool. If "Something else…" was not picked, skip this step entirely and never render the full catalog.
+
+   Full catalog (for the "Something else…" expansion only):
+
+```
+{
+  id: "connected-tools-all",
+  prompt: "Pick any others Self-driving should watch:",
   kind: "multi",
   options: [
     { label: "None of these", value: "none" },
