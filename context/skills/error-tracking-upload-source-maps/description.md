@@ -49,7 +49,10 @@ Wire source map generation, chunk-ID injection, and upload into your **productio
   2. The upload shells out to `posthog-cli` on the `PATH` (v0.7.4+); the PostHog wizard installs it for you, so do not run `npm install -g` yourself.
   3. The Gradle plugin is versioned separately from the `posthog-android` SDK — never reuse the SDK version in `id("com.posthog.android") version "…"`.
 - **Next.js / Nuxt / Angular** Use the framework's documented source-map upload integration from the reference; these own their build pipeline, so configure upload there rather than bolting on a separate CLI step.
-- **React Native** You upload platform debug symbols (Hermes maps, dSYMs) rather than plain `.js.map` files — follow the platform reference for the exact build hook.
+- **React Native (Expo)** Per the reference: add the `posthog-react-native/expo` plugin entry to `plugins` in `app.json`, and switch `metro.config.js` to `getPostHogExpoConfig` from `posthog-react-native/metro`. The reference badges **native crash symbolication** as *optional* — here it is not: enable `uploadNativeSymbols` with source inclusion on the plugin entry.
+  Gotchas:
+  1. The PostHog wizard installs `posthog-cli` for you — do not run `npm install -g` yourself.
+  2. You **must** also enable native crash autocapture (`errorTracking.autocapture.nativeCrashes`) in the SDK setup and install the `@posthog/react-native-plugin` package it depends on — per the reference.
 - **Flutter** One upload path per platform directory present (`web/`, `android/`, `ios/`) — wire every one that exists. There is no Dart-level upload.
   - **Web** `flutter build web --source-maps`, then `posthog-cli sourcemap process --directory build/web` as a post-build step.
   - **Android** Follow the **Android (Gradle)** bullet above, but on `android/app/build.gradle.kts` (never `android/build.gradle.kts`). Flutter's `android/settings.gradle.kts` owns plugin versions: declare `id("com.posthog.android") version "<latest>" apply false` there, then apply it versionless in the app module. Skip that bullet's `isMinifyEnabled` step — Flutter always shrinks release builds.
@@ -69,6 +72,7 @@ The upload credentials must be readable **by the build pipeline at build time**,
 - **`process` authenticates from the start.** `posthog-cli sourcemap process` resolves credentials before it injects chunk IDs — the inject phase needs them too, not just the upload — and fails without them. Always pass `--dotenv-file` to the `process` invocation. (It can still appear to work if the developer once ran `posthog-cli login`, which leaves credentials in `~/.posthog` — that won't exist in CI or on a teammate's machine.)
 - **iOS / Xcode** No loader — the Run Script phase's `POSTHOG_CLI_DOTENV_FILE="${SRCROOT}/.env"` prefix points posthog-cli at the gitignored `.env`. `POSTHOG_CLI_HOST` is the API host (`https://us.posthog.com`), never the `*.i.posthog.com` ingestion host.
 - **Android / Gradle** Gradle does not read `.env` — bridge it in the app module's build script (see the Android example). Unset properties fall back to real `POSTHOG_CLI_*` environment variables, so the same wiring works in CI. The host var follows the same API-host rule as iOS above.
+- **React Native (Expo)** Add `"dotenvFile": ".env"` to the `posthog-react-native/expo` plugin entry's options in `app.json` (needs posthog-react-native >= 4.60.0 — bump the package if older). No Xcode or Gradle wiring needed — the plugin handles the native hooks. In CI, set the `POSTHOG_CLI_*` values as job secrets instead. The host var follows the same API-host rule as iOS above.
 - **Flutter** One gitignored `.env` at the Flutter project root. Both native sub-projects sit one level down, so they reach *up* for it:
   - Web: `posthog-cli --dotenv-file .env sourcemap process --directory build/web` (flag goes **before** the subcommand).
   - Android: `rootProject.file("../.env")` — Gradle's root project is `android/`, not the Flutter root.
@@ -138,11 +142,11 @@ Resolve two concrete commands for this project: the production **build** command
 - **Plain Node** Build: `npm run build`. Run: `node <built entry>` — read package.json `main`/`bin` and the build output dir to name the real file (e.g. `node dist/index.js`).
 - **Android** Build: `./gradlew assembleRelease`. Run: launch on a device/emulator (Android Studio, or `./gradlew installRelease`).
 - **iOS** Local build + run are one step: Xcode Run with Build Configuration = Release. `xcodebuild` is CI-only.
+- **React Native (Expo)** Build + run are one step per platform: `npx expo run:ios --configuration Release` / `npx expo run:android --variant release`.
 - **Flutter** One pair per platform you wired:
   - Web — Build: `flutter build web --source-maps`. Run: `python3 -m http.server 8000 --directory build/web`. Not `flutter run -d chrome` — the dev server skips the upload.
   - Android — Build: `flutter build apk --release`. Run: `flutter run --release`.
   - iOS — Build: `flutter build ipa`. Run: `flutter run --release`.
-- **React Native** Run: `npx react-native run-ios` / `npx react-native run-android`.
 
 ### Set up CI for automatic uploads
 
@@ -317,7 +321,7 @@ Optionally add a temporary, clearly-labeled affordance that captures one test ex
 #### Examples
 - **Browser / SPA / SSR (web, react, nextjs, nuxt, angular, vite, webpack, rollup)** Add a button such as "Test PostHog Error Tracking" on the home/root page whose onClick calls `posthog.captureException(new Error("PostHog source maps test"))`.
 - **Node.js** Add a temporary route (e.g. `GET /__posthog-test-error`) on the existing server that calls `posthog.captureException(new Error("PostHog source maps test"))` and returns 200. With no HTTP layer, add the capture to the existing entry script where the client is initialised rather than creating a new file. Tell the user the exact command/URL to hit.
-- **React Native** Add a visible `Button` on the main screen whose onPress calls `posthog.captureException(new Error("PostHog source maps test"))`.
+- **React Native** Add a visible `Button` on the main screen whose onPress calls `posthog.captureException(new Error("PostHog source maps test"))`. Test flow — the upload only runs on the **Release** build: use the Release run command from "Identify the build and run commands", launch the app, tap the button. It's an event, not a crash — the app keeps running.
 - **Android (Kotlin)** Add a `Button` on the launcher Activity whose onClick handler is exactly:
   ```kotlin
   import com.posthog.PostHog
