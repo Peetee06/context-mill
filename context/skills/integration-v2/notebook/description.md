@@ -1,50 +1,20 @@
-# Mirror the report into a PostHog notebook
+# Confirm the notebook was published
 
-Once `posthog-setup-report.md` exists, mirror it into a shareable PostHog notebook
-so the user has an in-app copy to link and comment on. The notebook is an extra
-copy, not a replacement — keep the local report file in place.
+The setup report's notebook is no longer created in this step. The previous
+`report` step published the full report with a single `publish_handoff` call,
+which writes the report file, mirrors it into a shareable PostHog notebook, and
+pushes it to the PostHog session as `handoff_text` in one go.
 
-First `Read` the finished `posthog-setup-report.md` (don't reconstruct it from
-memory, and don't read it before the report step has written it). Then create the
-notebook in a single `notebooks-create` call through `posthog_exec` — that exact
-tool name, no tool search — with a `title` and `content` that wraps the report in
-one `ph-markdown-notebook` node.
+This step is now a confirmation only. There is nothing to call here — do not call
+`notebooks-create`, `notebook-edit`, or `notebooks-retrieve`, and do not emit a
+`[NOTEBOOK_URL]` marker.
 
-The exec command is `call notebooks-create` followed by the bare JSON argument —
-no quotes around it, and the whole argument on one line with the report's
-newlines and quotes escaped as normal JSON string encoding (`\n`, `\"`, `\\`):
+If the `report` step's `publish_handoff` call returned a notebook URL, the run
+is complete: the report file at the project root and the PostHog notebook both
+exist. If it returned `null` (credentials were unavailable or the upload failed),
+the report file and the session `handoff_text` are still set — the notebook is
+simply absent, and the user still has the local report. Note that in the run's
+final message and finish; do not retry the upload from here.
 
-```
-call notebooks-create {"title": "PostHog setup (wizard) – acme-shop", "content": {"type": "doc", "content": [{"type": "ph-markdown-notebook", "attrs": {"nodeId": "markdown-notebook-v2", "markdown": "# PostHog setup report\n\n## Events captured\n\n| Event | Where |\n|---|---|\n| `user_signed_up` | `src/auth.ts` |\n\nInitialized with \"capture_exceptions: true\" in `src/posthog.ts`.\n"}}]}}
-```
-
-Wrong, and their exact errors:
-
-```
-call notebooks-create '{"title": ...}'      → "Unexpected token" (quotes reach the JSON parser)
-call notebooks-create {"...": "line one
-line two"}                                  → "Bad control character" (literal newline in a JSON string)
-```
-
-A full multi-page report goes through in one call when encoded this way — never
-trim the report just to make it parse. If a correctly-encoded payload still
-fails, split the transport: create the notebook with the first sections, then
-append the rest with `notebooks-partial-update`, passing the `short_id` and
-`version` from the create response (`0` on a fresh notebook; each successful
-update increments it) and the full `content` doc with the remaining
-`ph-markdown-notebook` nodes appended:
-
-```
-call notebooks-partial-update {"short_id": "AbCdEfGh", "version": 0, "content": {"type": "doc", "content": [{"type": "ph-markdown-notebook", "attrs": {"nodeId": "markdown-notebook-v2", "markdown": "<sections already sent>"}}, {"type": "ph-markdown-notebook", "attrs": {"nodeId": "markdown-notebook-v2-part2", "markdown": "<remaining sections>"}}]}}
-```
-
-`version` is required on every content update — a 409 "Someone else edited the
-Notebook" means it is missing or stale (fetch the current one with
-`notebooks-retrieve` and resend), not that the payload is malformed.
-The reader still gets the whole report; only the transport is split. Either way
-the file at the project root stays complete.
-
-Take the `short_id` from the response, build the URL as
-`<host>/project/<project_id>/notebooks/<short_id>`, and emit it on its own line in
-your final message with this exact marker so the wizard surfaces it:
-`[NOTEBOOK_URL] <url>`. A URL only in prose, without the marker, is dropped.
+This step is retained in the flow so existing orchestrator graphs that include
+it keep resolving. A future change will fold it into the `report` step entirely.

@@ -1,10 +1,14 @@
-# Write the setup report
+# Write and publish the setup report
 
-Write `posthog-setup-report.md` at the project root summarizing the integration.
-When the file doesn't exist, write it directly — don't attempt a read first. If a
-previous run left one behind, `Read` it, then replace it wholesale (harnesses
-refuse to overwrite a file that wasn't read; nothing in the old report is worth
-merging).
+Compose the full setup report as markdown, then publish it in **one** call with
+the `publish_handoff` wizard tool. That single tool writes the report file,
+mirrors it into a shareable PostHog notebook, and pushes it to the PostHog
+session as `handoff_text` — do not `Write` the file yourself, do not call
+`notebooks-create`, and do not emit a `[NOTEBOOK_URL]` marker. `publish_handoff`
+handles all three and returns the notebook URL.
+
+## Sources
+
 Draw on two sources only:
 
 - the run's queue log — `.posthog-wizard-cache/queue.json`, which holds each
@@ -15,7 +19,7 @@ Draw on two sources only:
   table: grep the changed files for `capture(` calls and read the capture step's
   handoff in `queue.json`.
 
-Include:
+## What to include
 
 - A one-line summary of what was set up.
 - What was installed and how PostHog was initialized.
@@ -47,3 +51,19 @@ code changed this run and drop the ones that don't fit:
   identify, so returning sessions don't fragment onto anonymous distinct IDs.
 
 Keep it skimmable. This is the artifact the user opens after the run.
+
+## Publish
+
+Compose the entire report in one model turn — start it with an `#` H1 heading —
+then call `publish_handoff` once, passing the full markdown as `content`:
+
+```
+publish_handoff({ "content": "<the full report markdown>", "title": "PostHog setup (wizard) – <repo>" })
+```
+
+Do not write the report to disk with `Write`/`Edit` first; `publish_handoff`
+writes it atomically. Do not call `notebooks-create` or emit `[NOTEBOOK_URL]` —
+`publish_handoff` creates the notebook and surfaces its URL itself. If
+`publish_handoff` returns that no notebook was created (credentials unavailable
+or the upload failed), the report file and the session `handoff_text` are still
+set — proceed; the next step will note the notebook is absent.
