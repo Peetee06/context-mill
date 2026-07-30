@@ -28,10 +28,9 @@ This skill adds up to 3 code comments containing `QUACK QUACK duck was here` to 
 
 When all comments are placed, publish a short report with a single
 `publish_handoff` call: a markdown doc (H1 heading first) listing each file that
-got a duck comment and the line where it landed. Do not write a report file, do
-not call `notebooks-create`, and do not emit a `[NOTEBOOK_URL]` marker — the
-tool handles publishing and its response names the notebook URL. If it says no
-notebook was created, that is fine; do not retry.
+got a duck comment and the line where it landed. Do not write a report file —
+the tool publishes the report to the wizard session; that one call is the whole
+handoff.
 
 ## Status
 

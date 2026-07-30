@@ -76,7 +76,7 @@ Search for a file called `.posthog-events.json` and read it for available events
 
 Do not spawn subagents.
 
-Create the file posthog-setup-report.md. It should include a summary of the integration edits, a table with the event names, event descriptions, and files where events were added, a list of links for the dashboard and insights created, and a "Verify before merging" checklist (see below). Follow this format:
+Compose the setup report as markdown — do NOT write it to a file in the project. It should include a summary of the integration edits, a table with the event names, event descriptions, and files where events were added, a list of links for the dashboard and insights created, and a "Verify before merging" checklist (see below). Follow this format:
 
 <wizard-report>
 # PostHog post-wizard report
@@ -112,7 +112,9 @@ For the "Verify before merging" checklist, write GitHub-style checkboxes (`- [ ]
 
 Do not invent items beyond what applies. If only the two "Always" items apply, the checklist is just those two.
 
-Then mirror the report into a shareable PostHog notebook so the user has an in-app copy to link and comment on. Call `notebooks-create` with a `title` (e.g. `PostHog setup (wizard) – <repo_name>`) and `content` set to a single markdown node wrapping the report verbatim — `{"type":"doc","content":[{"type":"ph-markdown-notebook","attrs":{"nodeId":"markdown-notebook-v2","markdown":"<the full contents of posthog-setup-report.md>"}}]}`. Take the `short_id` from the response, build the notebook URL as `<host>/project/<project_id>/notebooks/<short_id>`, and emit it on its own line so the wizard can surface it: `[NOTEBOOK_URL]` followed by that URL. Keep the local `posthog-setup-report.md` — the notebook is an extra copy, not a replacement.
+Then publish the report to the wizard session with a single `publish_handoff` call, passing the complete report markdown as `content`. This call is how the report reaches the user — do not write it to a file instead.
+
+Then mirror the report into a shareable PostHog notebook so the user has an in-app copy to link and comment on. Call `notebooks-create` with a `title` (e.g. `PostHog setup (wizard) – <repo_name>`) and `content` set to a single markdown node wrapping the report verbatim — `{"type":"doc","content":[{"type":"ph-markdown-notebook","attrs":{"nodeId":"markdown-notebook-v2","markdown":"<the full report markdown you composed>"}}]}`. Take the `short_id` from the response, build the notebook URL as `<host>/project/<project_id>/notebooks/<short_id>`, and emit it on its own line so the wizard can surface it: `[NOTEBOOK_URL]` followed by that URL.
 
 Upon completion, update `.posthog-events.json` so it matches the events you actually implemented, then remove it with your file tools. If removal is blocked or fails in your environment, leave the file in place and move on — the wizard host cleans it up after the run. Do not retry the removal or reach for shell commands to force it.
 
@@ -121,5 +123,5 @@ Upon completion, update `.posthog-events.json` so it matches the events you actu
 Status to report in this phase:
 
 - Configured dashboard: [insert PostHog dashboard URL]
-- Created setup report: [insert full local file path]
+- Published setup report to the wizard session
 - Created notebook: [insert PostHog notebook URL]
