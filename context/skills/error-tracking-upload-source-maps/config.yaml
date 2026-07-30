@@ -74,6 +74,13 @@ variants:
     docs_urls:
       - https://posthog.com/docs/error-tracking/upload-source-maps/ios.md
 
+  - id: go
+    display_name: Go
+    description: Upload native debug symbols to PostHog Error Tracking for Go
+    tags: [go]
+    docs_urls:
+      - https://posthog.com/docs/error-tracking/upload-source-maps/go.md
+
   - id: rust
     display_name: Rust
     description: Upload native debug symbols to PostHog Error Tracking for Rust
