@@ -1,11 +1,9 @@
-# Write and publish the setup report
+# Compose and publish the setup report
 
-Compose the full setup report as markdown, then publish it in **one** call with
-the `publish_handoff` wizard tool. That single tool writes the report file,
-mirrors it into a shareable PostHog notebook, and pushes it to the PostHog
-session as `handoff_text` — do not `Write` the file yourself, do not call
-`notebooks-create`, and do not emit a `[NOTEBOOK_URL]` marker. `publish_handoff`
-handles all three and returns the notebook URL.
+Compose the full setup report as markdown, then publish it in **one**
+`publish_handoff` call. The tool mirrors the report into a shareable PostHog
+notebook and publishes it to the wizard session — do not write a report file,
+do not call `notebooks-create`, and do not emit a `[NOTEBOOK_URL]` marker.
 
 ## Sources
 
@@ -55,15 +53,14 @@ Keep it skimmable. This is the artifact the user opens after the run.
 ## Publish
 
 Compose the entire report in one model turn — start it with an `#` H1 heading —
-then call `publish_handoff` once, passing the full markdown as `content`:
+then call `publish_handoff` once, passing the full markdown as `content` and a
+title like `PostHog setup (wizard) – <repo>`:
 
 ```
-publish_handoff({ "content": "<the full report markdown>", "title": "PostHog setup (wizard) – <repo>" })
+publish_handoff({ "content": "<the full report markdown>", "title": "PostHog setup (wizard) – acme-shop" })
 ```
 
-Do not write the report to disk with `Write`/`Edit` first; `publish_handoff`
-writes it atomically. Do not call `notebooks-create` or emit `[NOTEBOOK_URL]` —
-`publish_handoff` creates the notebook and surfaces its URL itself. If
-`publish_handoff` returns that no notebook was created (credentials unavailable
-or the upload failed), the report file and the session `handoff_text` are still
-set — proceed; the next step will note the notebook is absent.
+The tool's response names the notebook URL. If it says no notebook was created
+(credentials unavailable or the upload failed), that is not a failure of your
+task — do not retry, and do not fall back to writing a file or calling
+`notebooks-create`.
