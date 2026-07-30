@@ -33,9 +33,9 @@ Load `wizard_ask` via `ToolSearch select:mcp__wizard-tools__wizard_ask`. Reach `
 
    - **Detected tools first.** From that block, take every tool whose `source_type` matches an entry in the connected-tools catalog (the `source_type` list in step 2 — e.g. detected `Sentry` → Sentry, `Github` → GitHub Issues). Ignore detected sources that are **not** in the catalog (Postgres, Stripe, …) — those belong to step 4, not this ask. List these first, right after "None of these". If the run prompt carries no detected block (older wizard), fall back to any step-2 evidence for ordering.
    - **Then the SaaS basics** — always offer GitHub Issues, Linear, Jira, Sentry, and Zendesk even when the scan didn't flag them; skip any already added above.
-   - **Then "Something else…"** — a final `show-more` option that opens the full catalog.
+   - **Then "Show more (N more hidden)"** — a final `show-more` option that opens the full catalog. Set `N` to the number of catalog tools you did **not** list above (36 minus the detected-plus-basics rows), so the label says how many are behind it instead of leaving the user to guess.
 
-   If the detected block found nothing, the list is just the SaaS basics + "Something else…". **"None of these" stays the first option** (an accidental `enter` declines). Example shape (detected tools spliced in between "None of these" and the basics):
+   If the detected block found nothing, the list is just the SaaS basics + "Show more (31 more hidden)" — 36 catalog tools minus the 5 basics. **"None of these" stays the first option** (an accidental `enter` declines). Example shape (detected tools spliced in between "None of these" and the basics):
 
 ```
 {
@@ -49,14 +49,14 @@ Load `wizard_ask` via `ToolSearch select:mcp__wizard-tools__wizard_ask`. Reach `
     { label: "Jira", value: "jira" },
     { label: "Sentry", value: "sentry" },
     { label: "Zendesk", value: "zendesk" },
-    { label: "Something else…", value: "show-more" }
+    { label: "Show more (31 more hidden)", value: "show-more" }
   ]
 }
 ```
 
-1b. **Only if the user picked "Something else…"**, ask a second multi-select with the full catalog below, minus the tools already shown in the first ask. Merge both answers into one picked set and drop the `show-more` sentinel — it is not a tool. If "Something else…" was not picked, skip this step entirely and never render the full catalog.
+1b. **Only if the user picked the "Show more" option**, ask a second multi-select with the full catalog below, minus the tools already shown in the first ask. Merge both answers into one picked set and drop the `show-more` sentinel — it is not a tool. If "Show more" was not picked, skip this step entirely and never render the full catalog.
 
-   Full catalog (for the "Something else…" expansion only):
+   Full catalog (for the "Show more" expansion only):
 
 ```
 {
