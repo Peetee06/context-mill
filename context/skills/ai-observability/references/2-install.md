@@ -1,97 +1,63 @@
 ---
 next_step: 3-instrument.md
 title: AI Observability Setup - Install
-description: Declare the packages the installed variant needs - OTel, wrapper, framework hook, or manual capture
+description: Declare the packages the installed variant needs - almost always just the PostHog SDK alongside the vendor SDK
 ---
 
 Declare the packages the variant you installed in `1-begin.md` needs in the project's manifest — and only those. Do not run the package manager here — the base integration's build/verify step (or the user) installs everything in one pass.
 
-Read the manifest first. If any of the required packages is already declared, leave the existing version alone and say so. Match the style of dependencies already in the file (versions, ordering, dev vs. runtime).
+Read the manifest first. If any required package is already declared, leave the existing version alone and say so. Match the style of dependencies already in the file (versions, ordering, dev vs. runtime).
 
-## What to add
+## The default: PostHog's SDK wrapper
 
-The linked install page for this variant carries the authoritative command. The shapes below reflect the current defaults across Tier-1 providers.
-
-### Wrapper path
-
-No OTel packages at all:
+Every direct provider (OpenAI, Anthropic, Google, Azure OpenAI, Mistral, Cohere, …) and every OpenAI-compatible gateway (Groq, OpenRouter, Together, Ollama, DeepSeek, xAI, Perplexity, Fireworks, Cerebras, Hugging Face, Dedalus, Portkey, Helicone, Cloudflare AI Gateway) installs the same two things:
 
 ```
 posthog                # Python — ships the posthog.ai.<provider> wrapper clients
 ```
 
 ```
-@posthog/ai            # Node — ships the wrapper clients
+@posthog/ai            # Node — the wrapper clients
 posthog-node           # Node — the PostHog client the wrapper takes
 ```
 
-### Python — the OTel path
+**No OpenTelemetry packages.** There is no `opentelemetry-sdk`, no `posthog[otel]`, and no `opentelemetry-instrumentation-<provider>` on this path. If you find yourself reaching for one, you're on the wrong mechanism — go back to `3-instrument.md`.
 
-Three packages:
+The vendor SDK itself (`openai`, `anthropic`, `@anthropic-ai/sdk`, …) is a prerequisite and should already be declared. Do not add or upgrade it.
 
-```
-posthog[otel]                                   # PostHog SDK + span processor
-opentelemetry-sdk                               # OTel core
-opentelemetry-instrumentation-<provider>        # provider auto-instrumentation
-```
+Portkey is the one gateway needing an extra package: `portkey-ai`.
 
-Examples:
+## Framework variants
 
-- OpenAI → `opentelemetry-instrumentation-openai-v2`
-- Anthropic → `opentelemetry-instrumentation-anthropic`
-- LangChain → `opentelemetry-instrumentation-langchain`
-- Google Gemini → `opentelemetry-instrumentation-google-generativeai`
+Agent and orchestration frameworks (LangChain, LangGraph, CrewAI, DSPy, LiteLLM, OpenAI Agents, Claude Agent SDK, Vercel AI, Mirascope, Instructor, …) ship their tracing hook inside `posthog` / `@posthog/ai` or the framework itself. Take the package list from the variant's install doc; don't assume the shape of another family.
 
-The vendor SDK itself (`openai`, `anthropic`, `langchain`, …) is a prerequisite — it should already be declared. Do not add or upgrade it.
+## The OpenTelemetry variants
 
-### Node — the OTel path
+Only the `opentelemetry-{python,node}` variants — and LlamaIndex, whose instrumentation is OTel-based — use the OTel packages:
 
 ```
-@posthog/ai                                     # PostHog span processor
-@opentelemetry/sdk-node                         # OTel core (Node)
-@opentelemetry/resources                        # resource attributes
-@opentelemetry/instrumentation-<provider>       # provider auto-instrumentation
+posthog[otel]                                   # Python — PostHog SDK + span processor
+opentelemetry-sdk
 ```
 
-Provider instrumentation packages:
-
-- OpenAI → `@opentelemetry/instrumentation-openai`
-- Anthropic → `@traceloop/instrumentation-anthropic`
-- LangChain → `@traceloop/instrumentation-langchain`
-- Google Gemini → `@traceloop/instrumentation-google-generativeai`
-
-### Vercel AI SDK (Node)
-
-No provider instrumentation package — Vercel AI emits OTel spans natively when `experimental_telemetry` is enabled. Just add:
-
 ```
-@posthog/ai
+@posthog/ai                                     # Node — PostHog span processor
 @opentelemetry/sdk-node
 @opentelemetry/resources
 ```
 
-### Gateway variants (Groq, OpenRouter, Together, Ollama, …)
+## Manual-capture path
 
-These use the `openai` SDK against a different host, so the packages are the OpenAI ones — `opentelemetry-instrumentation-openai-v2` (Python) or `@opentelemetry/instrumentation-openai` (Node). There is no per-gateway instrumentation package. The one exception is Portkey, which also needs `portkey-ai`.
-
-### Agent framework variants
-
-Framework variants generally need no OTel instrumentation package at all — the tracing hook ships in the framework or in `posthog` / `@posthog/ai`. Take the package list from the variant's install doc; do not assume the three-package OTel shape above applies.
-
-### Manual-capture path
-
-No OTel packages. Just PostHog core:
+Just PostHog core:
 
 ```
 posthog                # Python
 posthog-node           # Node
 ```
 
-If PostHog core is already installed (it should be — see `1-begin.md`), this file has nothing to add. Skip to `3-instrument.md`, which describes the manual `capture(...)` call shape.
-
 ## Do not do
 
 - Do not run `npm install` / `pip install` here.
 - Do not edit the lockfile.
 - Do not upgrade the vendor SDK.
-- Do not add packages for more than one mechanism — no OTel instrumentation packages on a wrapper-path run, and vice versa. The variant's install doc describes exactly one.
+- Do not add OpenTelemetry packages to a wrapper-path run. That is the most common wrong turn in this step, and it is wrong for every provider and gateway variant.

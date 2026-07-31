@@ -15,9 +15,9 @@ Everything else this skill needs — PostHog credentials, instrumentation packag
 Read every referenced file **before editing**. Then work through them in order:
 
 1. **Begin** — see `references/1-begin.md`. Pick the right variant using the ordered rules (framework before provider, gateway `baseURL` before the SDK it borrows), locate the LLM call sites, and answer the two questions that drive everything after: does the app register tools, and what identifies one conversation?
-2. **Install** — see `references/2-install.md`. Declare the variant's packages in the manifest — and only those.
-3. **Instrument** — see `references/3-instrument.md`. Wire the bootstrap the variant's install doc describes: OTel `TracerProvider` + `PostHogSpanProcessor`, a PostHog wrapper client, a framework tracing hook, or manual capture. Route the project token / host through environment variables.
-4. **Attach identity** — see `references/4-nesting.md`. Give the traces that belong to one conversation a shared `$ai_session_id`, and attribute them to a person with the distinct id. Mandatory. Spans are *not* your job — they come from the app's own tool registration.
+2. **Install** — see `references/2-install.md`. Declare the variant's packages in the manifest — and only those. For providers and gateways that's the PostHog SDK alongside the vendor SDK, with no OpenTelemetry packages.
+3. **Instrument** — see `references/3-instrument.md`. Swap the vendor client for PostHog's wrapper (or wire the framework's tracing hook, for framework variants). Route the project token / host through environment variables.
+4. **Build the tree** — see `references/4-nesting.md`. Attach `$ai_session_id`, a per-turn `posthog_trace_id`, and the distinct id to each call, and capture tool executions as `$ai_span` events. Mandatory — this is what turns isolated generations into a session tree.
 5. **Verify** — see `references/5-verify.md`. Describe a request the user can trigger, and grade what lands in PostHog — one session, grouped traces, right attribution — rather than what the diff contains.
 
 ## Reference files
@@ -29,10 +29,11 @@ The linked install page carries the exact code blocks for this variant's languag
 ## Key principles
 
 - **Environment variables.** Read `<ph_project_token>` and `<ph_client_api_host>` from env, using the framework's env-var convention. Never hardcode either value.
-- **One mechanism, and the variant chooses it.** The install doc for the variant you picked names the mechanism; wire that one and no other. Never swap a framework's own tracing hook for an OTel instrumentor.
-- **Minimal changes.** The wrapper swaps a client import; OTel init is a single call at process start, placed alongside any existing PostHog init. Don't restructure the app either way.
-- **Match the docs.** Package names, instrumentor imports, and processor names change between AIO releases. The install page for this variant is the source of truth.
-- **Sessions always, spans never.** Every run attaches an `$ai_session_id`, inferring the conversation boundary when the app has no explicit field — one id shared by the traces that belong together. Spans are the opposite: they come from the app's registered tools, and an app with no tools correctly has none. Never hand-author a span to make a trace look fuller.
+- **The SDK wrapper is the default, not OpenTelemetry.** OTel makes the session tree awkward to build and maintain, so provider and gateway variants use PostHog's drop-in wrapper client. Reserve OTel for the `opentelemetry-*` variants and LlamaIndex, and never swap a framework's own tracing hook for an instrumentor.
+- **Minimal changes.** The wrapper swaps a client constructor and adds parameters to existing calls. Don't restructure the app, and don't wrap the setup in an init function or module globals.
+- **Match the docs.** Package names and wrapper imports change between AIO releases. The install page for this variant is the source of truth.
+- **Cardinality is what gets graded.** One `$ai_session_id` per conversation, one `posthog_trace_id` per turn, shared by every call in it. An id minted per call is worse than none — it looks instrumented and groups nothing.
+- **Tools become spans.** When the app registers tools, capture each execution as an `$ai_span` event sharing the turn's trace id — the wrapper never sees your dispatch loop. Framework variants emit these themselves; an app with no tools correctly has none.
 - **Don't touch what isn't yours.** This skill instruments LLM observability only — generations, traces, sessions, spans. Identify calls, event tracking, error tracking, and dashboards belong to the base `integration` skill — do not add or edit them here.
 
 ## Emit a run record
@@ -43,7 +44,7 @@ When you finish, write `.posthog-wizard-cache/.posthog-ai.json` at the project r
 { "provider": "openai", "package": "@posthog/ai", "otel_init_file": "src/instrumentation.ts" }
 ```
 
-On the wrapper or manual-capture path there is no OTel init — set `otel_init_file` to the file where the wrapper client (or capture helper) was wired instead.
+`otel_init_file` keeps its name for the report's sake, but on the wrapper path there is no OTel init — set it to the file where the wrapper client was constructed (or, on the manual path, where the capture helper lives).
 
 The `report/` step reads this file to render an AI Observability section in the setup report. If the cache directory does not exist, create it.
 
