@@ -1,10 +1,13 @@
-# Write the setup report
+# Compose and publish the setup report
 
-Write `posthog-setup-report.md` at the project root summarizing the integration.
-When the file doesn't exist, write it directly — don't attempt a read first. If a
-previous run left one behind, `Read` it, then replace it wholesale (harnesses
-refuse to overwrite a file that wasn't read; nothing in the old report is worth
-merging).
+Compose the full setup report as markdown, then publish it in **one**
+`publish_handoff` call — that call is how the report reaches the user's wizard
+session. Do not write a report file. The same markdown is then mirrored into a
+shareable PostHog notebook (see the notebook skill), whose URL you emit with
+the `[NOTEBOOK_URL]` marker.
+
+## Sources
+
 Draw on two sources only:
 
 - the run's queue log — `.posthog-wizard-cache/queue.json`, which holds each
@@ -15,7 +18,7 @@ Draw on two sources only:
   table: grep the changed files for `capture(` calls and read the capture step's
   handoff in `queue.json`.
 
-Include:
+## What to include
 
 - A one-line summary of what was set up.
 - What was installed and how PostHog was initialized.
@@ -47,3 +50,16 @@ code changed this run and drop the ones that don't fit:
   identify, so returning sessions don't fragment onto anonymous distinct IDs.
 
 Keep it skimmable. This is the artifact the user opens after the run.
+
+## Publish
+
+Compose the entire report in one model turn — start it with an `#` H1 heading —
+then call `publish_handoff` once, passing the full markdown as `content`:
+
+```
+publish_handoff({ "content": "<the full report markdown>" })
+```
+
+Do not fall back to writing a file. After the call goes through, mirror the
+same markdown into a PostHog notebook and emit its URL with the
+`[NOTEBOOK_URL]` marker, following the notebook skill.

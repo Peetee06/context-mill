@@ -1,14 +1,15 @@
 # Mirror the report into a PostHog notebook
 
-Once `posthog-setup-report.md` exists, mirror it into a shareable PostHog notebook
-so the user has an in-app copy to link and comment on. The notebook is an extra
-copy, not a replacement — keep the local report file in place.
+Once the setup report markdown is composed, mirror it into a shareable PostHog
+notebook so the user has an in-app copy to link and comment on. No report file
+is written to the project — the notebook and the `publish_handoff` call are how
+the report reaches the user.
 
-First `Read` the finished `posthog-setup-report.md` (don't reconstruct it from
-memory, and don't read it before the report step has written it). Then create the
-notebook in a single `notebooks-create` call through `posthog_exec` — that exact
-tool name, no tool search — with a `title` and `content` that wraps the report in
-one `ph-markdown-notebook` node.
+Use the exact report markdown you composed — the same content you pass to
+`publish_handoff`, verbatim, not a summary of it. Create the notebook in a
+single `notebooks-create` call through `posthog_exec` — that exact tool name,
+no tool search — with a `title` and `content` that wraps the report in one
+`ph-markdown-notebook` node.
 
 The exec command is `call notebooks-create` followed by the bare JSON argument —
 no quotes around it, and the whole argument on one line with the report's
@@ -41,8 +42,7 @@ call notebooks-partial-update {"short_id": "AbCdEfGh", "version": 0, "content": 
 `version` is required on every content update — a 409 "Someone else edited the
 Notebook" means it is missing or stale (fetch the current one with
 `notebooks-retrieve` and resend), not that the payload is malformed.
-The reader still gets the whole report; only the transport is split. Either way
-the file at the project root stays complete.
+The reader still gets the whole report; only the transport is split.
 
 Take the `short_id` from the response, build the URL as
 `<host>/project/<project_id>/notebooks/<short_id>`, and emit it on its own line in
