@@ -170,6 +170,7 @@ function generateMarketplace({ skills, tempDir, version, outputDir, configDir })
     // Generate grouped plugins
     for (const [pluginName, groupSkills] of Object.entries(pluginGroups)) {
         const pluginDir = path.join(pluginsDir, pluginName);
+        const seen = new Set();
 
         for (const skill of groupSkills) {
             const srcDir = path.join(tempDir, skill.id);
@@ -178,7 +179,15 @@ function generateMarketplace({ skills, tempDir, version, outputDir, configDir })
                 continue;
             }
 
-            const destDir = path.join(pluginDir, 'skills', skill.shortId);
+            // `shortId` is only unique within a skill group, but a plugin aggregates
+            // many groups — keying dirs by it let two skills overwrite each other.
+            // Use the globally-unique `id`, as the mega-plugin below already does.
+            if (seen.has(skill.id)) {
+                throw new Error(`Plugin "${pluginName}" has duplicate skill id "${skill.id}"`);
+            }
+            seen.add(skill.id);
+
+            const destDir = path.join(pluginDir, 'skills', skill.id);
             copyDirSync(srcDir, destDir);
 
             allSkillEntries.push({
