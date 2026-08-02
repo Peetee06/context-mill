@@ -125,6 +125,20 @@ describe('generateMarketplace', () => {
         }
     });
 
+    it('logs the number of skills copied, not the number offered', () => {
+        const logged = [];
+        const log = console.log;
+        console.log = msg => logged.push(msg);
+        try {
+            // `missing-skill` has no source dir, so it is skipped with a warning.
+            run([skill('omnibus-instrument-integration'), skill('missing-skill')]);
+        } finally {
+            console.log = log;
+        }
+
+        expect(logged).toContain('  ✓ posthog-integration (1 skills)');
+    });
+
     it('throws rather than overwriting when two skills share an id', () => {
         expect(() =>
             run([skill('omnibus-instrument-integration'), skill('omnibus-instrument-integration')]),
