@@ -1,0 +1,15 @@
+# Link-check exclusions, read automatically by lychee in both link-check
+# workflows. One regex per line (Rust regex syntax, unanchored — use ^ when you
+# mean "starts with"). Blank lines and # comments are ignored.
+#
+# BEFORE ADDING A LINE HERE, prefer the structural fix:
+# lychee never extracts URLs inside `inline code spans` or ``` fenced blocks ```.
+# If the URL is illustrative — a config value, an API host, a placeholder like
+# https://example.com/<id> — wrap it in backticks in the markdown and it stops
+# being checked, with no entry here. That is why this file is empty: every
+# non-link URL in context/ is already code-formatted.
+#
+# Add a regex here only for URLs that are real links we cannot check from CI,
+# e.g. a host that hard-blocks datacenter IPs. Always say why:
+#
+#   ^https://intranet\.example\.com    # SSO-only, unreachable from CI

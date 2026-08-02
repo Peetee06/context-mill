@@ -1,0 +1,58 @@
+name: PostHog Context Mill - Link check (offline)
+permissions:
+  contents: read
+
+# Blocking PR check for links that CANNOT flake: relative file paths and
+# #anchors within the repo. No network requests are made (--offline is
+# equivalent to --scheme file), so a failure here is always caused by the PR
+# that triggered it — a moved file, or a renamed heading an existing link
+# points at. External URLs are checked by link-check-external.yml instead,
+# nightly and non-blocking, so an unrelated site being down never blocks a PR.
+#
+# The baseline was green when this landed, so any red is a real regression.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  link-check-offline:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # Paths are duplicated in link-check-external.yml. They are static — a
+      # skill tree is added maybe a few times a year — so they are kept inline
+      # rather than hoisted into a shared config.
+      #
+      # example-apps/ is EXCLUDED ON PURPOSE. Its markdown is read by humans,
+      # who can route around a dead link; context/ ships into agent context
+      # windows, where a dead link silently degrades every wizard and MCP user.
+      # Please don't widen this glob without that trade-off in mind.
+    - name: Check relative links and anchors
+      uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+      with:
+        args: >-
+          --offline
+          --include-fragments
+          --no-progress
+          'context/**/*.md'
+          README.md
+          CONTRIBUTING.md
+          AGENTS.md
+          CLAUDE.md
+        fail: true
+
+    - name: Explain how to fix a failure
+      if: failure()
+      run: |
+        cat <<'EOF'
+        ::error::Broken relative link or anchor. These do not flake — a link in this repo points at a file or heading that no longer exists.
+        Fix by either:
+          - restoring/repointing the link to the new path or heading, or
+          - if a heading was intentionally renamed, updating every link that targets its #anchor.
+        See the job summary above for the exact file, line, and target.
+        EOF
