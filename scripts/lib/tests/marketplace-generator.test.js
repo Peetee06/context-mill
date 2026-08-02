@@ -54,10 +54,16 @@ beforeEach(() => {
             '  integration:',
             '    name: posthog-integration',
             '    destination: skills/posthog/integration',
+            // A second plugin keeps the suite honest: keyed by `shortId` for even
+            // one plugin, the assertions below fail.
+            '  logs:',
+            '    name: posthog-logs',
+            '    destination: skills/posthog/logs',
         ].join('\n'),
     );
     writeSkillSource('omnibus-instrument-integration');
     writeSkillSource('omnibus-instrument-product-analytics');
+    writeSkillSource('logs-setup');
 });
 
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -71,6 +77,7 @@ describe('generateMarketplace', () => {
         const skills = [
             skill('omnibus-instrument-integration'),
             skill('omnibus-instrument-product-analytics'),
+            skill('logs-setup', { category: 'logs' }),
         ];
 
         const result = run(skills);
@@ -81,7 +88,26 @@ describe('generateMarketplace', () => {
             'omnibus-instrument-integration',
             'omnibus-instrument-product-analytics',
         ]);
+        // Every plugin is keyed the same way — `logs-setup` would land in
+        // `skills/all` too if any plugin still used `shortId`.
+        expect(pluginSkills('posthog-logs')).toEqual(['logs-setup']);
         expect(result.skillCount).toBe(skills.length);
+    });
+
+    it('pools every skill into the mega-plugin under its own id', () => {
+        const skills = [
+            skill('omnibus-instrument-integration'),
+            skill('omnibus-instrument-product-analytics'),
+            skill('logs-setup', { category: 'logs' }),
+        ];
+
+        run(skills);
+
+        expect(pluginSkills('posthog-all').sort()).toEqual([
+            'logs-setup',
+            'omnibus-instrument-integration',
+            'omnibus-instrument-product-analytics',
+        ]);
     });
 
     it('copies each skill intact, with no files bleeding across siblings', () => {
@@ -102,6 +128,14 @@ describe('generateMarketplace', () => {
     it('throws rather than overwriting when two skills share an id', () => {
         expect(() =>
             run([skill('omnibus-instrument-integration'), skill('omnibus-instrument-integration')]),
-        ).toThrow(/duplicate skill id "omnibus-instrument-integration"/);
+        ).toThrow(/Duplicate skill id "omnibus-instrument-integration"/);
+    });
+
+    // The mega-plugin pools every plugin's skills, so a collision across two
+    // plugins reaches it even though neither plugin collides on its own.
+    it('throws when two skills in different plugins share an id', () => {
+        expect(() =>
+            run([skill('logs-setup'), skill('logs-setup', { category: 'logs' })]),
+        ).toThrow(/Duplicate skill id "logs-setup"/);
     });
 });
