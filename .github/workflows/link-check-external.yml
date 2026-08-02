@@ -49,7 +49,10 @@ jobs:
       # real rot, on the host that dominates our links. Anchors are still
       # checked offline, where the target is a local file and can't lie.
       #
-      # Every .md in the repo; see the note in link-check-offline.yml.
+      # Every .md in the repo, so a new directory is covered without touching
+      # this file. Scoped to *.md rather than '.' because bare '.' also parses
+      # HTML, where root-relative asset paths (/favicon.ico) can't resolve
+      # without --root-dir and report as errors.
     - name: Check external links
       id: lychee
       uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
