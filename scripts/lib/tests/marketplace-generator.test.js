@@ -5,8 +5,9 @@ import path from 'path';
 import { generateMarketplace } from '../marketplace-generator.js';
 
 // Two skills from different groups sharing one category — the real shape of the
-// collision: `omnibus/instrument-integration` and `omnibus/instrument-product-analytics`
-// both declare `category: integration` with a single variant `id: all`.
+// #309 collision: `omnibus/instrument-integration` and
+// `omnibus/instrument-product-analytics` both declare `category: integration`
+// with a single variant `id: all`.
 const skill = (id, extra = {}) => ({
     id,
     shortId: 'all',
@@ -61,6 +62,10 @@ beforeEach(() => {
 
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
+// Regression tests for #309 — `posthog-integration` published
+// `omnibus-instrument-product-analytics` under `skills/all` while the
+// integration omnibus went missing, because plugin skill dirs were keyed by the
+// group-scoped `shortId` instead of the globally-unique `id`.
 describe('generateMarketplace', () => {
     it('gives every skill in a plugin its own directory, keyed by full id', () => {
         const skills = [
