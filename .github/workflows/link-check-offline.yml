@@ -14,26 +14,27 @@ on:
 jobs:
   link-check-offline:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      # example-apps/ is EXCLUDED ON PURPOSE. Its markdown is read by humans,
-      # who can route around a dead link; context/ ships into agent context
-      # windows, where a dead link silently degrades every wizard and MCP user.
-      # Please don't widen this glob without that trade-off in mind.
+      # Every .md in the repo, so a new directory is covered without touching
+      # this file. Scoped to *.md rather than '.' because bare '.' also parses
+      # HTML, where root-relative asset paths (/favicon.ico) can't resolve
+      # without --root-dir and report as errors.
     - name: Check relative links and anchors
       uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
       with:
+        # Pinned: the action SHA alone doesn't pin the lychee binary it fetches.
+        lycheeVersion: v0.24.2
         args: >-
           --offline
           --include-fragments
           --no-progress
-          'context/**/*.md'
-          README.md
-          CONTRIBUTING.md
-          AGENTS.md
-          CLAUDE.md
+          --exclude-path node_modules
+          --exclude-path dist
+          './**/*.md'
         fail: true
 
     - name: Explain the failure
