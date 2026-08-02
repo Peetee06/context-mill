@@ -7,9 +7,7 @@ permissions:
 # it, and blocking merges on someone else's 502 trains people to ignore CI.
 #
 # Why this exists: a dead link in context/ ships into agent context windows and
-# degrades every wizard and MCP user until a human notices by hand. Two past
-# fixes (0741482, fda834d) were exactly that — found by accident, after
-# shipping.
+# degrades every wizard and MCP user until a human notices by hand.
 
 on:
   schedule:
@@ -48,11 +46,6 @@ jobs:
       # happen on GET. Without this, a HEAD success silently skips the anchor
       # check and dead anchors come and go between runs.
       #
-      # Exclusions live in .lycheeignore at the repo root — see that file first,
-      # it explains why backticking an illustrative URL is usually the better
-      # fix than adding an entry.
-      #
-      # Paths duplicated in link-check-offline.yml; static, see note there.
       # example-apps/ excluded on purpose — human-read, not agent-read.
     - name: Check external links
       id: lychee
@@ -69,29 +62,9 @@ jobs:
           CONTRIBUTING.md
           AGENTS.md
           CLAUDE.md
-        # Never fail the job; this workflow reports, it does not gate. The
-        # webhook step below branches on the exit code instead.
+        # Don't fail here — the webhook step below still needs to run. The job
+        # fails at the end instead, so GitHub shows it red too.
         fail: false
-
-    - name: Explain how to fix a failure
-      if: steps.lychee.outputs.exit_code == 2
-      run: |
-        cat <<'EOF'
-        ::warning::Dead external links found — see the job summary for file, line and URL.
-        A finding here is a 404/410 (resource gone) or a missing #anchor (page moved on, heading renamed).
-        Transient failures (403/429/timeouts) are already accepted and will not appear.
-
-        To fix:
-          - repoint the URL to its current location, or remove the link.
-          - missing anchor: the page still exists but the heading was renamed — update the #fragment.
-
-        FALSE POSITIVE? Prefer the structural fix: lychee ignores URLs inside
-        `inline code spans` and fenced blocks, so backticking an illustrative
-        URL (a config value, an API host, a placeholder) removes it from the
-        check with no config change. Only if it is a real link we genuinely
-        cannot reach from CI, add a regex to .lycheeignore at the repo root and
-        say why in a comment.
-        EOF
 
       # Mirrors the failure-reporting pattern in e2e.yml / integration.yml.
       # Only exit code 2 means "link check failures"; 1 and 3 are lychee's own
@@ -117,3 +90,11 @@ jobs:
             --arg runNumber "$RUN_NUMBER" \
             --arg jobUrl "$JOB_URL" \
             '{event: $event, commitSha: $commitSha, ref: $ref, workflow: $workflow, runId: $runId, runNumber: $runNumber, jobUrl: $jobUrl}')"
+
+      # Last, so the webhook always fires first.
+    - name: Fail on dead links
+      if: steps.lychee.outputs.exit_code == 2
+      run: |
+        echo "::error::Dead links found — see the 'Check external links' step above for each file, line and URL."
+        echo "False positive? .lycheeignore at the repo root explains how to handle it."
+        exit 1
