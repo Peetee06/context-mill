@@ -37,6 +37,12 @@ jobs:
       #        whether the resource exists.
       #   timeouts  Transient network trouble; --accept-timeouts covers the
       #        case retries do not.
+      #   3xx  Followed, not flagged. posthog.com redirects moved docs rather
+      #        than 404ing, so a moved page still resolves and an agent still
+      #        lands on the content. Flagging redirects would mean triaging
+      #        ~40 a night, most of them auth gates that are correct as
+      #        written. When a redirect is eventually retired it becomes a
+      #        404 and this check catches it the same night.
       #
       # 5xx is deliberately NOT accepted. lychee retries 3x by default, which
       # absorbs a momentary blip; a 5xx that survives retries every night means
