@@ -10,7 +10,7 @@ Read the manifest first. If any required package is already declared, leave the 
 
 ## The default: PostHog's SDK wrapper
 
-Every direct provider (OpenAI, Anthropic, Google, Azure OpenAI, Mistral, Cohere, …) and every OpenAI-compatible gateway (Groq, OpenRouter, Together, Ollama, DeepSeek, xAI, Perplexity, Fireworks, Cerebras, Hugging Face, Dedalus, Portkey, Helicone, Cloudflare AI Gateway) installs the same two things:
+Every direct provider (OpenAI, Anthropic, Google, Azure OpenAI, Mistral, Cohere, …) and every OpenAI-compatible gateway (Groq, OpenRouter, Together, Ollama, DeepSeek, xAI, Perplexity, Fireworks, Cerebras, Hugging Face, Dedalus, Portkey, Helicone, Cloudflare AI Gateway) installs the same two things — **AWS Bedrock is the one exception, and it is still OTel-based; see below**:
 
 ```
 posthog                # Python — ships the posthog.ai.<provider> wrapper clients
@@ -33,7 +33,7 @@ Agent and orchestration frameworks (LangChain, LangGraph, CrewAI, DSPy, LiteLLM,
 
 ## The OpenTelemetry variants
 
-Only the `opentelemetry-{python,node}` variants — and LlamaIndex, whose instrumentation is OTel-based — use the OTel packages:
+Three cases still use the OTel packages: the `opentelemetry-{python,node}` variants, LlamaIndex, and **AWS Bedrock** — Bedrock has no wrapper client and instruments the AWS SDK instead (`opentelemetry-instrumentation-botocore` in Python, `@opentelemetry/instrumentation-aws-sdk` in Node). Take its exact list from its install doc; it differs from the generic pair below.
 
 ```
 posthog[otel]                                   # Python — PostHog SDK + span processor

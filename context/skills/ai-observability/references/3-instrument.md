@@ -8,9 +8,9 @@ description: Swap the vendor client for PostHog's wrapper - the default path for
 
 | Family | Who uses it | Shape |
 |---|---|---|
-| **Wrapper client** | every direct provider and OpenAI-compatible gateway | swap the client constructor, hand it a PostHog client |
+| **Wrapper client** | every direct provider and OpenAI-compatible gateway, except AWS Bedrock | swap the client constructor, hand it a PostHog client |
 | **Framework hook** | agent frameworks and Vercel AI | the framework's own callback, tracing processor, or `experimental_telemetry` |
-| **OTel bootstrap** | the `opentelemetry-*` variants and LlamaIndex only | `TracerProvider` + `PostHogSpanProcessor` |
+| **OTel bootstrap** | the `opentelemetry-*` variants, LlamaIndex, and AWS Bedrock | `TracerProvider` + `PostHogSpanProcessor` |
 | **Manual capture** | `manual-capture` | explicit `capture()` calls at the call site |
 
 Wire exactly one. This step makes generations land; attaching identity and capturing tool calls is `4-nesting.md`'s job, and it is mandatory, not optional polish.
