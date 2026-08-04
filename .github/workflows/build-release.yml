@@ -5,11 +5,20 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Minimal default; jobs scope up only what they need. build-and-release needs
+# `contents: write` to create/edit the GitHub release and force-push the
+# `latest` tag; check-version only reads the checkout and calls the read-only
+# `/releases/latest` API.
+permissions:
+  contents: read
+
 jobs:
   check-version:
     name: Check for a new version to release
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     outputs:
       is-new-version: ${{ steps.check.outputs.is-new-version }}
       version: ${{ steps.check.outputs.version }}

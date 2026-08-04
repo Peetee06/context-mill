@@ -5,10 +5,20 @@ on:
 
 name: release-please
 
+# Default to no permissions; the release-please job scopes up what it needs.
+# In practice the release-please-action uses the GitHub App installation token
+# (not GITHUB_TOKEN), so these permissions don't grant capability to the tool —
+# but declaring them satisfies CodeQL's minimum-permissions check and
+# documents intent.
+permissions: {}
+
 jobs:
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Get app token
         id: app-token
