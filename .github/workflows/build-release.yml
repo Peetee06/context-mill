@@ -69,7 +69,9 @@ jobs:
     if: needs.check-version.outputs.is-new-version == 'true'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write        # create/edit releases, push `latest` tag
+      pull-requests: write   # relabel release-please's PR after publish
+      issues: write          # create the "autorelease: tagged" label if missing
     env:
       RELEASE_VERSION: ${{ needs.check-version.outputs.version }}
       RELEASE_TAG: ${{ needs.check-version.outputs.tag }}
@@ -200,11 +202,33 @@ jobs:
           git tag -f latest
           git push -f origin latest
 
+      # release-please labels every release PR `autorelease: pending` and expects
+      # its own release step to flip that label to `autorelease: tagged`. Since
+      # we set `skip-github-release: true` (build-release owns the release,
+      # not release-please), that transition never happens on its own — and
+      # release-please refuses to open the next release PR while any merged
+      # release PR is still labeled `autorelease: pending` ("There are
+      # untagged, merged release PRs outstanding - aborting"). This step closes
+      # the lifecycle manually so release-please can move on.
+      - name: Close release-please PR lifecycle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create "autorelease: tagged" --color ededed \
+            --description "Release-please: release for this PR was cut" 2>/dev/null || true
+          PR=$(gh pr list --state merged --label "autorelease: pending" --limit 1 --json number --jq '.[0].number // ""')
+          if [ -n "$PR" ]; then
+            echo "Flipping PR #$PR: autorelease:pending -> autorelease:tagged"
+            gh pr edit "$PR" --remove-label "autorelease: pending" --add-label "autorelease: tagged"
+          else
+            echo "No merged release PR with 'autorelease: pending' — nothing to do."
+          fi
+
       # Fire Slack once the release is genuinely shipped for consumers (draft
-      # flipped to --latest, `latest` git tag moved). The downstream mirror
-      # steps below (PostHog/skills, PostHog/ai-plugin) are useful side
-      # effects but not gating for the wizard, so their failure shouldn't
-      # swallow the release announcement.
+      # flipped to --latest, `latest` git tag moved, release-please PR
+      # lifecycle closed). The downstream mirror steps below (PostHog/skills,
+      # PostHog/ai-plugin) are useful side effects but not gating for the
+      # wizard, so their failure shouldn't swallow the release announcement.
       - name: Notify Slack of release
         uses: slackapi/slack-github-action@485a9d42d3a73031f12ec201c457e2162c45d02d # v2.0.0
         with:
