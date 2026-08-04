@@ -17,8 +17,16 @@ jobs:
           app-id: ${{ secrets.GH_APP_WIZARD_RELEASER_APP_ID }}
           private-key: ${{ secrets.GH_APP_WIZARD_RELEASER_PRIVATE_KEY }}
 
+      # release-please only manages the "chore(main): release X.Y.Z" PR that
+      # bumps package.json + .release-please-manifest.json + CHANGELOG.md.
+      # It does NOT tag and does NOT create GitHub releases.
+      # build-release.yml owns the entire release object (tag, draft, assets, publish, mirroring).
+      # Rationale: keeps the two workflows writing to non-overlapping downstream
+      # systems (git-repo state vs release/tag state), same separation-of-concerns
+      # pattern as wizard's release-please + publish split.
       - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         with:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          skip-github-release: true

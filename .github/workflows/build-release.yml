@@ -17,21 +17,25 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          fetch-depth: 0
 
-      - name: Compare package.json to latest git tag
+      # Compare package.json's version to the tag of the latest PUBLISHED
+      # (non-draft, non-prerelease) GitHub release. release-please only bumps
+      # package.json (via its PR); it never creates a release. So a mismatch
+      # here means "the release PR merged and we still owe the world a shipped
+      # release for this version" — even on a workflow_dispatch retry after a
+      # partially-failed run, this still evaluates true because the release
+      # never got flipped out of draft.
+      - name: Compare package.json to latest published release
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(jq -r '.version' package.json)
-          LATEST_TAG=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="v0.0.0"
-          fi
-          LATEST_VERSION=${LATEST_TAG#v}
+          LATEST_PUBLISHED_TAG=$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name' 2>/dev/null || echo "v0.0.0")
+          LATEST_PUBLISHED_VERSION=${LATEST_PUBLISHED_TAG#v}
           echo "package.json version: ${VERSION}"
-          echo "latest git tag: ${LATEST_TAG}"
-          if [ "$VERSION" != "$LATEST_VERSION" ]; then
+          echo "latest published release: ${LATEST_PUBLISHED_TAG}"
+          if [ "$VERSION" != "$LATEST_PUBLISHED_VERSION" ]; then
             echo "is-new-version=true" >> "$GITHUB_OUTPUT"
           else
             echo "is-new-version=false" >> "$GITHUB_OUTPUT"
@@ -40,7 +44,7 @@ jobs:
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
 
   build-and-release:
-    name: Build, upload assets, publish release
+    name: Build, tag, upload assets, publish release
     needs: check-version
     if: needs.check-version.outputs.is-new-version == 'true'
     runs-on: ubuntu-latest
@@ -86,18 +90,53 @@ jobs:
           echo "=== dist/skills/ ==="
           ls -lh dist/skills/
 
-      # release-please has already created a draft GitHub Release for RELEASE_TAG
-      # with the CHANGELOG body. Upload every asset onto that draft before flipping
-      # it to published — keeps the invariant that `releases/latest` never points
-      # at an assetless release.
+      # Extract the CHANGELOG.md section for this version. release-please's
+      # release PR appended a "## [X.Y.Z] (date)" block at the top; slice from
+      # that header up to (but not including) the next "## [" header.
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          awk -v version="$RELEASE_VERSION" '
+            /^## \[/ {
+              if (in_section) exit
+              if ($0 ~ "^## \\[" version "\\]") { in_section = 1; next }
+            }
+            in_section { print }
+          ' CHANGELOG.md > /tmp/release-notes.md
+          echo "=== extracted release notes ==="
+          cat /tmp/release-notes.md
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "WARN: no CHANGELOG.md section found for v${RELEASE_VERSION}; falling back to a stub body"
+            printf 'Automated release of PostHog integration resources for AI agents.\n\n**Version:** %s\n**SHA:** %s\n' "$RELEASE_VERSION" "$GITHUB_SHA" > /tmp/release-notes.md
+          fi
+
+      # Idempotent: if a draft release for RELEASE_TAG already exists (from a
+      # previous partial run), reuse it. Otherwise create a fresh draft. Either
+      # way, the tag is created if it doesn't yet exist — release-please stopped
+      # doing that when we set skip-github-release, so build-release is the sole
+      # tag writer for RELEASE_TAG.
+      - name: Create or reuse draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists — reusing."
+          else
+            echo "Creating draft release $RELEASE_TAG at ${GITHUB_SHA}..."
+            gh release create "$RELEASE_TAG" \
+              --draft \
+              --target "$GITHUB_SHA" \
+              --title "Release $RELEASE_TAG" \
+              --notes-file /tmp/release-notes.md
+          fi
+
       - name: Upload skills bundle
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "$RELEASE_TAG" ./dist/skills-mcp-resources.zip --clobber
 
       - name: Upload individual skill ZIPs and skill menu
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Upload each skill ZIP as a release asset
           for file in dist/skills/*.zip; do
@@ -127,15 +166,14 @@ jobs:
 
       - name: Publish release
         # Every asset (bundle, skill ZIPs, skill-menu.json, docs) is now uploaded,
-        # so flip the draft to published atomically. This is the point `releases/latest`
-        # moves to the new version — the wizard never sees it without skill-menu.json.
+        # so flip the draft to published atomically. This is the point
+        # `releases/latest` moves to the new version — the wizard never sees it
+        # without skill-menu.json.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "$RELEASE_TAG" --draft=false --latest
 
       - name: Update latest tag
-        # release-please already created and pushed RELEASE_TAG. Only the moving
-        # `latest` tag is ours to manage — point it at the current commit.
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
