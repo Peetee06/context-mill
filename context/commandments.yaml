@@ -90,6 +90,17 @@ commandments:
     - Avoid deprecated feature flag helpers such as `IsFeatureEnabled`, `GetFeatureFlag`, `GetFeatureFlagPayload`, and `Capture.SendFeatureFlags` in new code
     - For error tracking, use `posthog.NewDefaultException(...)` for direct captures or wrap `log/slog` with `posthog.NewSlogCaptureHandler(...)` for automatic warning-and-above exception capture
 
+  rust:
+    - posthog-rs is the Rust SDK crate; add it with `cargo add posthog-rs` and construct the client with `posthog_rs::client(options).await`
+    - Create one client per process and share it (for example an `Arc` in your app state or a `OnceCell`); do not build a new client per request or task
+    - Configure the project token and host from environment variables via `ClientOptions` (the `(api_key, host)` tuple); never hardcode PostHog secrets
+    - Because `capture` is fire-and-forget, always call `client.flush().await` and `client.shutdown().await` during graceful shutdown so queued events are delivered before exit
+    - Server-side captures must set a stable `distinct_id` on `Event::new(event, distinct_id)` that matches frontend identify calls; avoid anonymous or literal IDs for business events
+    - The SDK has no `identify` or `alias` helper; set person properties by inserting a `$set` property on an event
+    - For feature flags, call `client.evaluate_flags(distinct_id, EvaluateFlagsOptions::default()).await` once per user/request, then read values from the returned snapshot with `is_enabled(...)`
+    - For error tracking, use `client.capture_exception_with(&err, CaptureExceptionOptions::new()...)`; the `error-tracking` feature is enabled by default in recent versions
+    - The Rust SDK has no surveys or session replay support; do not promise or scaffold those features
+
   dotnet:
     - posthog-dotnet package names are `PostHog` for general .NET apps and `PostHog.AspNetCore` for ASP.NET Core apps
     - Use environment variables, user secrets, or configuration providers for `ProjectToken`, `HostUrl`, and `PersonalApiKey`; never hardcode PostHog secrets
@@ -157,6 +168,17 @@ commandments:
     - Create a dedicated PostHogService class in app/Services/ - do NOT scatter PostHog::capture calls throughout controllers
     - Register PostHog configuration in config/posthog.php using env() for all settings (api_key, host, disabled)
     - Do NOT use Laravel's event system or observers for analytics - call capture explicitly where actions occur
+    - Call PostHog::flush() after capture in queue jobs, Horizon, and Octane - a long-running worker never destructs, so its events sit in the SDK buffer until batch_size (default 100) is reached and are silently lost on restart
+
+  wordpress:
+    - Ship the integration as a standalone plugin in wp-content/plugins - do NOT edit a theme's functions.php, which is lost on theme switch or theme update
+    - Guard every plugin entry file with `if (!defined('ABSPATH')) { exit; }` before any other code
+    - Print the client snippet from a wp_head hook and escape the interpolated token with esc_js() - never echo a raw token into markup
+    - Read the project token from a wp-config.php constant or a WordPress option - do NOT hardcode it in plugin source
+    - Capture pageviews with the client SDK and reserve PostHog::capture for real server-side WordPress actions (comment_post, woocommerce_thankyou, user_register)
+    - Call PostHog::flush() at the end of a capture - a web request has no single exit point like a CLI script does
+    - Evaluate feature flags client-side on pages served by full-page caching (Varnish, batcache, WP Super Cache) - server-side flag checks are baked into the cached HTML for every visitor
+    - WordPress catches fatals with its own WP_Fatal_Error_Handler and renders the recovery-mode page, so a fatal can be swallowed before a PHP handler reports it - capture exceptions explicitly with PostHog::captureException in a try/catch, and do not rely on WP_DEBUG being on in production to surface them
 
   ruby:
     - "posthog-ruby is the Ruby SDK gem name (add `gem 'posthog-ruby'` to Gemfile) but require it with `require 'posthog'` (NOT `require 'posthog-ruby'`)"

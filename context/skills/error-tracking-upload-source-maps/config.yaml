@@ -59,9 +59,13 @@ variants:
 
   - id: flutter
     display_name: Flutter
+    description: Upload Flutter debug symbols to PostHog Error Tracking
     tags: [flutter, dart]
     docs_urls:
       - https://posthog.com/docs/error-tracking/upload-source-maps/flutter.md
+      - https://posthog.com/docs/error-tracking/upload-source-maps/web.md
+      - https://posthog.com/docs/error-tracking/upload-mappings/android.md
+      - https://posthog.com/docs/error-tracking/upload-source-maps/ios.md
 
   - id: ios
     display_name: iOS
@@ -69,6 +73,20 @@ variants:
     tags: [ios, swift]
     docs_urls:
       - https://posthog.com/docs/error-tracking/upload-source-maps/ios.md
+
+  - id: go
+    display_name: Go
+    description: Upload native debug symbols to PostHog Error Tracking for Go
+    tags: [go]
+    docs_urls:
+      - https://posthog.com/docs/error-tracking/upload-source-maps/go.md
+
+  - id: rust
+    display_name: Rust
+    description: Upload native debug symbols to PostHog Error Tracking for Rust
+    tags: [rust]
+    docs_urls:
+      - https://posthog.com/docs/error-tracking/upload-source-maps/rust.md
 
   - id: vite
     display_name: Vite

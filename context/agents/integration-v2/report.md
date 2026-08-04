@@ -1,23 +1,26 @@
 ---
 type: report
 flow: integration-v2
-label: Write the setup report
+label: Publish the setup report
 model_pi: openai/gpt-5.6-luna
 effort_pi: low
 model_sdk: claude-sonnet-4-6
 effort_sdk: high
 skills: [integration-v2-report, integration-v2-notebook, integration-v2-mcp]
-allowedTools: [Read, Write, Glob, Grep]
+allowedTools: [Read, Glob, Grep]
 disallowedTools: [enqueue_task]
 dependsOn: [dashboard, review]
 ---
 
 ## Goal
 
-Write the setup report summarizing what this integration did, drawing only on what
-the run itself recorded: the queue log and event plan in `.posthog-wizard-cache/`
-(`queue.json` and `.posthog-events.json`), and the handoff each step left behind.
-Then mirror it into a shareable PostHog notebook.
+Compose the setup report summarizing what this integration did, drawing only on
+what the run itself recorded: the queue log and event plan in
+`.posthog-wizard-cache/` (`queue.json` and `.posthog-events.json`), and the
+handoff each step left behind. Then publish it with a single `publish_handoff`
+call, and mirror the same markdown into a shareable PostHog notebook, emitting
+its URL with the `[NOTEBOOK_URL]` marker. Do not write a report file — the
+handoff call and the notebook are how the report reaches the user.
 
 Separate what the run verified from what it did not. A passing build proves the
 code compiles, not that events flow — never write that an event was captured
@@ -35,9 +38,10 @@ before those events mean anything.
 
 ## How you know you succeeded
 
-`posthog-setup-report.md` exists at the project root: what was installed and
-initialized, the events captured, whether identify was wired or skipped, error
-tracking added, the dashboard link, any build conflict in full, and the next
-steps for the user. Every claim in it traces to a handoff, and what the run could
-not confirm reads as unconfirmed. The report is also mirrored into a PostHog
-notebook whose URL is emitted with the `[NOTEBOOK_URL]` marker.
+One `publish_handoff` call went through with the full report: what was
+installed and initialized, the events captured, whether identify was wired or
+skipped, error tracking added, the dashboard link, any build conflict in full,
+and the next steps for the user. Every claim in it traces to a handoff, and
+what the run could not confirm reads as unconfirmed. The same report is
+mirrored into a PostHog notebook whose URL is emitted with the
+`[NOTEBOOK_URL]` marker.

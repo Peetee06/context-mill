@@ -58,3 +58,5 @@ again there is the point, not a duplicate. Your handoff names the files you
 changed, how identity is established in them, and what a later step must do for its
 own calls to inherit it — whether that is nothing at all, or tagging each call
 itself. If the app has no auth or user concept, say so and stop.
+
+You do not run builds, linters, or tests — the review task verifies the whole integration after you; your edits just need to be right by reading.

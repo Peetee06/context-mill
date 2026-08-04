@@ -10,6 +10,12 @@ Use the framework's public env-var convention so the client can read them.
 - the public project token
 - the PostHog host
 
+Where a build genuinely has no valid environment to read from, often
+mobile projects, (iOS/Android release and archive builds), embed the
+real public token in the config the build ships — never an empty string or
+placeholder. Env-based configuration still covers development and any build
+that can read the environment.
+
 Then document these keys for other developers: add them to `.env.example` (create
 it if the project has none), with the real names and empty or placeholder values —
 never the real secret. This file is committed, so the next developer knows which
@@ -50,10 +56,22 @@ and the diff looks complete while zero events send. Either:
 - **Extend the policy.** Allow the PostHog hosts in `script-src` and
   `connect-src`, per the CSP reference below.
 - **Work within it.** Bundle the `posthog-js` dependency the manifest already
-  declares instead of loading it from the CDN, which satisfies `script-src`.
-  Events still have to send: allow the PostHog host in `connect-src`, or route
-  them through a same-origin proxy. `connect-src` falls back to `default-src`,
-  so a bare `default-src 'self'` blocks sending too.
+  declares instead of loading it from the CDN — but bundling only covers the
+  entry bundle. posthog-js lazy-loads the session-replay recorder, surveys, and
+  toolbar from the PostHog assets CDN at runtime, so `script-src` must allow
+  the PostHog hosts even when bundled. Events still have to send: allow the
+  PostHog host in `connect-src`, or route everything through a same-origin
+  proxy. `connect-src` falls back to `default-src`, so a bare
+  `default-src 'self'` blocks sending too.
+
+Whenever you extend a CSP, extend every directive the SDK needs in one pass —
+partial edits fail silently (events send but replay/surveys never load):
+
+```
+script-src:  https://*.posthog.com   (lazy-loaded bundles, even when self-hosting the entry)
+connect-src: <the api host>          (event ingestion + feature flags)
+worker-src:  blob:                   (session replay's worker)
+```
 
 Say in your handoff which you did — the review and the report need to know how
 events leave the page.
