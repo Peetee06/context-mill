@@ -248,15 +248,23 @@ jobs:
           repositories: skills,ai-plugin
 
       - name: Push plugins to skills repo
+        id: skills_push
         env:
           SKILLS_REPO_TOKEN: ${{ steps.skills_token.outputs.token }}
         run: |
           MANIFEST="dist/push-manifest.json"
           TARGET_REPO=$(jq -r '.target_repo' "$MANIFEST")
-          WORK_DIR=$(mktemp -d)
+          # ghcommit-action resolves its `repository` input under $GITHUB_WORKSPACE,
+          # so the clone lives there rather than in a mktemp dir.
+          WORK_DIR="$GITHUB_WORKSPACE/.skills-push"
+          rm -rf "$WORK_DIR"
 
           echo "Cloning $TARGET_REPO..."
           git clone "https://x-access-token:${SKILLS_REPO_TOKEN}@github.com/${TARGET_REPO}.git" "$WORK_DIR"
+          {
+            echo "target_repo=$TARGET_REPO"
+            echo "target_branch=$(git -C "$WORK_DIR" rev-parse --abbrev-ref HEAD)"
+          } >> "$GITHUB_OUTPUT"
 
           # Read each plugin entry from the push manifest and sync to the destination
           jq -c '.plugins[]' "$MANIFEST" | while read -r entry; do
@@ -276,29 +284,41 @@ jobs:
             cp -r "$SOURCE"/. "$DEST"/
           done
 
-          # Commit and push
           cd "$WORK_DIR"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to push"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "Update generated plugins from context-mill v${RELEASE_VERSION}"
-            git push
-            echo "Pushed updated plugins to $TARGET_REPO"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-          rm -rf "$WORK_DIR"
+
+      # Both target repos require signed commits, so the mirrored content is
+      # committed through the GitHub API instead of pushed with git.
+      - name: Commit plugins to skills repo
+        if: steps.skills_push.outputs.changed == 'true'
+        uses: planetscale/ghcommit-action@a6b150b81dca5dd027baa898604418eec9e11465 # v0.2.22
+        with:
+          commit_message: Update generated plugins from context-mill ${{ env.RELEASE_TAG }}
+          repo: ${{ steps.skills_push.outputs.target_repo }}
+          branch: ${{ steps.skills_push.outputs.target_branch }}
+          repository: .skills-push
+        env:
+          GITHUB_TOKEN: ${{ steps.skills_token.outputs.token }}
 
       - name: Push omnibus skills to ai-plugin repo
+        id: ai_plugin_push
         env:
           SKILLS_REPO_TOKEN: ${{ steps.skills_token.outputs.token }}
         run: |
-          WORK_DIR=$(mktemp -d)
+          # Under $GITHUB_WORKSPACE so ghcommit-action can resolve it (see above).
+          WORK_DIR="$GITHUB_WORKSPACE/.ai-plugin-push"
+          rm -rf "$WORK_DIR"
           MEGA_SKILLS="dist/marketplace/plugins/posthog-all/skills"
 
           echo "Cloning PostHog/ai-plugin..."
           git clone "https://x-access-token:${SKILLS_REPO_TOKEN}@github.com/PostHog/ai-plugin.git" "$WORK_DIR"
+          echo "target_branch=$(git -C "$WORK_DIR" rev-parse --abbrev-ref HEAD)" >> "$GITHUB_OUTPUT"
 
           # Sync each omnibus skill, stripping the "omnibus-" prefix to match ai-plugin's layout
           for src in "$MEGA_SKILLS"/omnibus-*; do
@@ -313,17 +333,24 @@ jobs:
           done
 
           cd "$WORK_DIR"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to push to PostHog/ai-plugin"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "Update generated skills from context-mill v${RELEASE_VERSION}"
-            git push
-            echo "Pushed updated skills to PostHog/ai-plugin"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-          rm -rf "$WORK_DIR"
+
+      - name: Commit omnibus skills to ai-plugin repo
+        if: steps.ai_plugin_push.outputs.changed == 'true'
+        uses: planetscale/ghcommit-action@a6b150b81dca5dd027baa898604418eec9e11465 # v0.2.22
+        with:
+          commit_message: Update generated skills from context-mill ${{ env.RELEASE_TAG }}
+          repo: PostHog/ai-plugin
+          branch: ${{ steps.ai_plugin_push.outputs.target_branch }}
+          repository: .ai-plugin-push
+        env:
+          GITHUB_TOKEN: ${{ steps.skills_token.outputs.token }}
 
       - name: Build Summary
         run: |
