@@ -21,10 +21,7 @@ variants:
     display_name: OpenAI (Python)
     tags: [openai, python, ai_observability]
     docs_urls:
-      # TEMPORARY — pinned to PostHog/posthog#75976 (branch marco/update-aio-docs).
-      # Revert to https://posthog.com/docs/ai-observability/installation/openai.md
-      # when that PR merges; the branch is deleted on merge and this 404s.
-      - https://raw.githubusercontent.com/PostHog/posthog/marco/update-aio-docs/docs/onboarding/ai-observability/openai.tsx
+      - https://posthog.com/docs/ai-observability/installation/openai.md
       - https://posthog.com/docs/libraries/python.md
 
   - id: openai-node
@@ -40,10 +37,7 @@ variants:
     display_name: Anthropic (Python)
     tags: [anthropic, python, ai_observability]
     docs_urls:
-      # TEMPORARY — pinned to PostHog/posthog#75976 (branch marco/update-aio-docs).
-      # Revert to https://posthog.com/docs/ai-observability/installation/anthropic.md
-      # when that PR merges; the branch is deleted on merge and this 404s.
-      - https://raw.githubusercontent.com/PostHog/posthog/marco/update-aio-docs/docs/onboarding/ai-observability/anthropic.tsx
+      - https://posthog.com/docs/ai-observability/installation/anthropic.md
       - https://posthog.com/docs/libraries/python.md
 
   - id: anthropic-node
@@ -74,10 +68,7 @@ variants:
     display_name: Vercel AI SDK
     tags: [vercel-ai, javascript_node, ai_observability]
     docs_urls:
-      # TEMPORARY — pinned to PostHog/posthog#75976 (branch marco/update-aio-docs).
-      # Revert to https://posthog.com/docs/ai-observability/installation/vercel-ai.md
-      # when that PR merges; the branch is deleted on merge and this 404s.
-      - https://raw.githubusercontent.com/PostHog/posthog/marco/update-aio-docs/docs/onboarding/ai-observability/vercel-ai.tsx
+      - https://posthog.com/docs/ai-observability/installation/vercel-ai.md
       - https://posthog.com/docs/libraries/node.md
   - id: google-python
     framework: google-gemini
@@ -102,11 +93,7 @@ variants:
     description: PostHog AI Observability using explicit $ai_generation capture calls (no auto-instrumentation)
     tags: [manual-capture, ai_observability]
     docs_urls:
-      # TEMPORARY — pinned to PostHog/posthog#75976 (branch marco/update-aio-docs).
-      # Revert to https://posthog.com/docs/ai-observability/installation/manual-capture.md
-      # when that PR merges; the branch is deleted on merge and this 404s.
-      # Note the upstream file is manual.tsx, not manual-capture.tsx.
-      - https://raw.githubusercontent.com/PostHog/posthog/marco/update-aio-docs/docs/onboarding/ai-observability/manual.tsx
+      - https://posthog.com/docs/ai-observability/installation/manual-capture.md
 
   - id: azure-openai-python
     framework: azure-openai
@@ -224,13 +211,7 @@ variants:
     display_name: Groq (Node)
     tags: [groq, javascript_node, ai_observability]
     docs_urls:
-      # TEMPORARY — pinned to PostHog/posthog#75976 (branch marco/update-aio-docs).
-      # Revert to https://posthog.com/docs/ai-observability/installation/groq.md
-      # when that PR merges; the branch is deleted on merge and this 404s.
-      # groq.tsx is now only a config object — the shared snippet carries the
-      # actual steps, so both are needed for this variant to be usable.
-      - https://raw.githubusercontent.com/PostHog/posthog/marco/update-aio-docs/docs/onboarding/ai-observability/groq.tsx
-      - https://raw.githubusercontent.com/PostHog/posthog/marco/update-aio-docs/docs/onboarding/ai-observability/_snippets/openai-compatible.tsx
+      - https://posthog.com/docs/ai-observability/installation/groq.md
       - https://posthog.com/docs/libraries/node.md
 
   - id: hugging-face-python
@@ -397,10 +378,7 @@ variants:
     description: PostHog AI Observability for the OpenAI Agents SDK (Python)
     tags: [openai-agents, python, ai_observability]
     docs_urls:
-      # TEMPORARY — pinned to PostHog/posthog#75976 (branch marco/update-aio-docs).
-      # Revert to https://posthog.com/docs/ai-observability/installation/openai-agents.md
-      # when that PR merges; the branch is deleted on merge and this 404s.
-      - https://raw.githubusercontent.com/PostHog/posthog/marco/update-aio-docs/docs/onboarding/ai-observability/openai-agents.tsx
+      - https://posthog.com/docs/ai-observability/installation/openai-agents.md
       - https://posthog.com/docs/libraries/python.md
 
   - id: pydantic-ai
