@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.42.1](https://github.com/PostHog/context-mill/compare/v1.42.0...v1.42.1) (2026-08-04)
+
+
+### Bug Fixes
+
+* **wizard:** Whack a mole part 6: move the luna-low tasks to terra-low ([36d795d](https://github.com/PostHog/context-mill/commit/36d795dad3ae50ec30afba504b6a29280e03aaff))
+
 ## [1.42.0](https://github.com/PostHog/context-mill/compare/v1.41.0...v1.42.0) (2026-08-04)
 
 
