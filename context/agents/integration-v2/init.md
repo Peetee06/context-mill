@@ -34,3 +34,5 @@ If the app ships a Content-Security-Policy, the handoff also names exactly
 which directives you touched (`script-src`, `connect-src`, `worker-src`) and
 which you left alone — the review verifies directive-by-directive, and an
 unnamed directive reads as unhandled, not as fine.
+
+You do not run builds, linters, or tests — the review task verifies the whole integration after you; your edits just need to be right by reading.

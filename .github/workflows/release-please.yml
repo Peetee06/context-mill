@@ -1,0 +1,42 @@
+on:
+  push:
+    branches:
+      - main
+
+name: release-please
+
+# Default to no permissions; the release-please job scopes up what it needs.
+# In practice the release-please-action uses the GitHub App installation token
+# (not GITHUB_TOKEN), so these permissions don't grant capability to the tool —
+# but declaring them satisfies CodeQL's minimum-permissions check and
+# documents intent.
+permissions: {}
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Get app token
+        id: app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        with:
+          app-id: ${{ secrets.GH_APP_WIZARD_RELEASER_APP_ID }}
+          private-key: ${{ secrets.GH_APP_WIZARD_RELEASER_PRIVATE_KEY }}
+
+      # release-please only manages the "chore(main): release X.Y.Z" PR that
+      # bumps package.json + .release-please-manifest.json + CHANGELOG.md.
+      # It does NOT tag and does NOT create GitHub releases.
+      # build-release.yml owns the entire release object (tag, draft, assets, publish, mirroring).
+      # Rationale: keeps the two workflows writing to non-overlapping downstream
+      # systems (git-repo state vs release/tag state), same separation-of-concerns
+      # pattern as wizard's release-please + publish split.
+      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-release: true

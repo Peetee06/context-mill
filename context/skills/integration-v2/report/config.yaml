@@ -1,6 +1,6 @@
 type: docs-only
 template: description.md
-description: Write the PostHog setup report from the run's handoffs
+description: Publish the PostHog setup report from the run's handoffs
 tags: [orchestrator, report]
 variants:
   - id: all

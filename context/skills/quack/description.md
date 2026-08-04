@@ -24,10 +24,19 @@ This skill adds up to 3 code comments containing `QUACK QUACK duck was here` to 
 - Do NOT add comments to generated files, lock files, or node_modules.
 - Do NOT remove or change any existing comments.
 
+## Publish the handoff
+
+When all comments are placed, publish a short report with a single
+`publish_handoff` call: a markdown doc (H1 heading first) listing each file that
+got a duck comment and the line where it landed. Do not write a report file —
+the tool publishes the report to the wizard session; that one call is the whole
+handoff.
+
 ## Status
 
 Report progress with `[STATUS]` prefixed messages:
 
 - Scanning project for key files
 - Adding duck comment to {filename}
+- Publishing quack report
 - Quack quack complete
