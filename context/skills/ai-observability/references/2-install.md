@@ -1,63 +1,41 @@
 ---
 next_step: 3-instrument.md
 title: AI Observability Setup - Install
-description: Declare the packages the installed variant needs - almost always just the PostHog SDK alongside the vendor SDK
+description: Declare the packages the variant needs, and no others
 ---
 
-Declare the packages the variant you installed in `1-begin.md` needs in the project's manifest — and only those. Do not run the package manager here — the base integration's build/verify step (or the user) installs everything in one pass.
+Declare the packages in the project manifest. Do not run the package manager. The build step installs them later.
 
-Read the manifest first. If any required package is already declared, leave the existing version alone and say so. Match the style of dependencies already in the file (versions, ordering, dev vs. runtime).
+Read the manifest first. If a package is already there, keep its version and say so in the report. Match the style of the entries around it.
 
-## The default: PostHog's SDK wrapper
+## Providers and gateways
 
-Every direct provider (OpenAI, Anthropic, Google, Azure OpenAI, Mistral, Cohere, …) and every OpenAI-compatible gateway (Groq, OpenRouter, Together, Ollama, DeepSeek, xAI, Perplexity, Fireworks, Cerebras, Hugging Face, Dedalus, Portkey, Helicone, Cloudflare AI Gateway) installs the same two things — **AWS Bedrock is the one exception, and it is still OTel-based; see below**:
+Every provider and every OpenAI-compatible gateway needs the PostHog SDK next to the vendor SDK.
 
-```
-posthog                # Python — ships the posthog.ai.<provider> wrapper clients
-```
+| Runtime | Packages |
+|---|---|
+| Python | `posthog` |
+| Node | `@posthog/ai`, `posthog-node` |
 
-```
-@posthog/ai            # Node — the wrapper clients
-posthog-node           # Node — the PostHog client the wrapper takes
-```
+**Do not add OpenTelemetry packages.** The wrapper path needs none. If you reach for `opentelemetry-sdk`, `posthog[otel]`, or an `opentelemetry-instrumentation-*` package, you picked the wrong mechanism. Go back to `3-instrument.md`.
 
-**No OpenTelemetry packages.** There is no `opentelemetry-sdk`, no `posthog[otel]`, and no `opentelemetry-instrumentation-<provider>` on this path. If you find yourself reaching for one, you're on the wrong mechanism — go back to `3-instrument.md`.
+The vendor SDK is already in the manifest. Do not add or upgrade it.
 
-The vendor SDK itself (`openai`, `anthropic`, `@anthropic-ai/sdk`, …) is a prerequisite and should already be declared. Do not add or upgrade it.
+Portkey also needs `portkey-ai`.
 
-Portkey is the one gateway needing an extra package: `portkey-ai`.
+## Other variants
 
-## Framework variants
+| Variant | Packages |
+|---|---|
+| Agent frameworks | The list the install doc names |
+| `opentelemetry-*`, LlamaIndex, AWS Bedrock | The OTel packages the install doc names |
+| `manual-capture` | `posthog` or `posthog-node` |
 
-Agent and orchestration frameworks (LangChain, LangGraph, CrewAI, DSPy, LiteLLM, OpenAI Agents, Claude Agent SDK, Vercel AI, Mirascope, Instructor, …) ship their tracing hook inside `posthog` / `@posthog/ai` or the framework itself. Take the package list from the variant's install doc; don't assume the shape of another family.
+AWS Bedrock has no wrapper client. It instruments the AWS SDK through OpenTelemetry, so its package list differs from every other provider.
 
-## The OpenTelemetry variants
+## Do not
 
-Three cases still use the OTel packages: the `opentelemetry-{python,node}` variants, LlamaIndex, and **AWS Bedrock** — Bedrock has no wrapper client and instruments the AWS SDK instead (`opentelemetry-instrumentation-botocore` in Python, `@opentelemetry/instrumentation-aws-sdk` in Node). Take its exact list from its install doc; it differs from the generic pair below.
-
-```
-posthog[otel]                                   # Python — PostHog SDK + span processor
-opentelemetry-sdk
-```
-
-```
-@posthog/ai                                     # Node — PostHog span processor
-@opentelemetry/sdk-node
-@opentelemetry/resources
-```
-
-## Manual-capture path
-
-Just PostHog core:
-
-```
-posthog                # Python
-posthog-node           # Node
-```
-
-## Do not do
-
-- Do not run `npm install` / `pip install` here.
+- Do not run `npm install` or `pip install`.
 - Do not edit the lockfile.
 - Do not upgrade the vendor SDK.
-- Do not add OpenTelemetry packages to a wrapper-path run. That is the most common wrong turn in this step, and it is wrong for every provider and gateway variant.
+- Do not add OpenTelemetry to a wrapper variant.

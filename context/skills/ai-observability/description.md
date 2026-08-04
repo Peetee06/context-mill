@@ -14,11 +14,10 @@ Everything else this skill needs — PostHog credentials, instrumentation packag
 
 Read every referenced file **before editing**. Then work through them in order:
 
-1. **Begin** — see `references/1-begin.md`. Pick the right variant using the ordered rules (framework before provider, gateway `baseURL` before the SDK it borrows), locate the LLM call sites, and answer the two questions that drive everything after: does the app register tools, and what identifies one conversation?
+1. **Begin** — see `references/1-begin.md`. Pick the variant with the ordered rules (framework before provider, gateway base URL before the SDK it borrows), then read four facts from the code: the conversation, the user, the turn, and whether the app registers tools.
 2. **Install** — see `references/2-install.md`. Declare the variant's packages in the manifest — and only those. For providers and gateways that's the PostHog SDK alongside the vendor SDK, with no OpenTelemetry packages.
-3. **Instrument** — see `references/3-instrument.md`. Swap the vendor client for PostHog's wrapper (or wire the framework's tracing hook, for framework variants). Route the project token / host through environment variables.
-4. **Build the tree** — see `references/4-nesting.md`. Attach `$ai_session_id`, a per-turn `posthog_trace_id`, and the distinct id to each call, and capture tool executions as `$ai_span` events. Mandatory — this is what turns isolated generations into a session tree.
-5. **Verify** — see `references/5-verify.md`. Describe a request the user can trigger, and grade what lands in PostHog — one session, grouped traces, right attribution — rather than what the diff contains.
+3. **Instrument** — see `references/3-instrument.md`. Swap the vendor client for PostHog's wrapper, attach `$ai_session_id`, a per-turn `posthog_trace_id`, and the distinct id to every call, and capture tool runs as `$ai_span` events. This step is what turns isolated generations into a session tree.
+4. **Verify** — see `references/4-verify.md`. Describe a request the user can trigger, and grade what lands in PostHog — one session, grouped traces, right attribution — rather than what the diff contains.
 
 ## Reference files
 
