@@ -15,8 +15,6 @@ description: Swap the vendor client for PostHog's wrapper - the default path for
 
 Wire exactly one. This step makes generations land; attaching identity and capturing tool calls is `4-nesting.md`'s job, and it is mandatory, not optional polish.
 
-> If the bundled install page for this variant still shows a `TracerProvider` + `PostHogSpanProcessor` bootstrap for a provider or gateway, it predates the SDK-first rewrite. The wrapper shape below wins.
-
 ## Match the doc's shape
 
 **Copy the install doc's code block and change only the values.** The setup belongs at module level where the client is constructed — typically under ten lines. Adding structure around it is the most common way this step goes wrong:
