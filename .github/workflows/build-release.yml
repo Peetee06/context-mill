@@ -1,33 +1,60 @@
 name: Build and Release MCP Resources
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version number (e.g., 1.0.0)'
-        required: false
-        type: string
 
 jobs:
-  build-and-release:
-    # Manual trigger OR (PR merged with label 'mcp-publish')
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.merged == true && 
-       contains(github.event.pull_request.labels.*.name, 'mcp-publish'))
+  check-version:
+    name: Check for a new version to release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      is-new-version: ${{ steps.check.outputs.is-new-version }}
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
 
+      - name: Compare package.json to latest git tag
+        id: check
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          LATEST_TAG=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.0"
+          fi
+          LATEST_VERSION=${LATEST_TAG#v}
+          echo "package.json version: ${VERSION}"
+          echo "latest git tag: ${LATEST_TAG}"
+          if [ "$VERSION" != "$LATEST_VERSION" ]; then
+            echo "is-new-version=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-new-version=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+  build-and-release:
+    name: Build, upload assets, publish release
+    needs: check-version
+    if: needs.check-version.outputs.is-new-version == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      RELEASE_VERSION: ${{ needs.check-version.outputs.version }}
+      RELEASE_TAG: ${{ needs.check-version.outputs.tag }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          fetch-depth: 0  # Fetch all history for proper versioning
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -42,77 +69,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Determine version
-        id: version
-        env:
-          INPUT_VERSION: ${{ github.event.inputs.version }}
-          EVENT_NAME: ${{ github.event_name }}
-          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-        run: |
-          if [ -n "$INPUT_VERSION" ]; then
-            VERSION="$INPUT_VERSION"
-            echo "Using manually specified version: ${VERSION}"
-          else
-            # Get the latest semver tag (ignore 'latest' tag), or use 0.0.0 if no tags exist
-            # Use grep to filter only tags matching semver pattern (v followed by digits)
-            # Explicitly exclude 'latest' tag
-            LATEST_TAG=$(git tag -l | grep -v '^latest$' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
-            if [ -z "$LATEST_TAG" ]; then
-              LATEST_TAG="v0.0.0"
-            fi
-            echo "Latest semver tag found: ${LATEST_TAG}"
-            # Remove 'v' prefix if present
-            LATEST_VERSION=${LATEST_TAG#v}
-
-            # Parse version components
-            IFS='.' read -r -a VERSION_PARTS <<< "$LATEST_VERSION"
-            MAJOR=${VERSION_PARTS[0]:-0}
-            MINOR=${VERSION_PARTS[1]:-0}
-            PATCH=${VERSION_PARTS[2]:-0}
-
-            # Determine bump type from PR labels
-            BUMP_TYPE="patch"  # Default to patch
-            if [ "$EVENT_NAME" == "pull_request" ]; then
-              echo "PR Labels: ${PR_LABELS}"
-
-              if echo "${PR_LABELS}" | grep -q "major"; then
-                BUMP_TYPE="major"
-              elif echo "${PR_LABELS}" | grep -q "minor"; then
-                BUMP_TYPE="minor"
-              elif echo "${PR_LABELS}" | grep -q "patch"; then
-                BUMP_TYPE="patch"
-              fi
-            fi
-
-            echo "Bump type: ${BUMP_TYPE}"
-
-            # Increment version based on bump type
-            case "${BUMP_TYPE}" in
-              major)
-                MAJOR=$((MAJOR + 1))
-                MINOR=0
-                PATCH=0
-                ;;
-              minor)
-                MINOR=$((MINOR + 1))
-                PATCH=0
-                ;;
-              patch)
-                PATCH=$((PATCH + 1))
-                ;;
-            esac
-
-            VERSION="${MAJOR}.${MINOR}.${PATCH}"
-            echo "Bumping from ${LATEST_VERSION} to ${VERSION} (${BUMP_TYPE})"
-          fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
-          echo "Building version: ${VERSION}"
-
       - name: Build skills
-        run: pnpm run build
         env:
-          BUILD_VERSION: ${{ steps.version.outputs.version }}
+          BUILD_VERSION: ${{ env.RELEASE_VERSION }}
+        run: pnpm run build
 
       - name: Scan skills with Warlock
         env:
@@ -126,45 +86,18 @@ jobs:
           echo "=== dist/skills/ ==="
           ls -lh dist/skills/
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1.1.4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          release_name: Release ${{ steps.version.outputs.tag }}
-          body: |
-            Automated release of PostHog integration resources for AI agents.
-
-            This release contains:
-            - **skills-mcp-resources.zip** - Bundle containing skills manifest + all skill ZIPs
-            - Individual skill ZIPs for direct download
-
-            **Version:** ${{ steps.version.outputs.version }}
-            **SHA:** ${{ github.sha }}
-          # Publish as a draft so `releases/latest` keeps pointing at the previous
-          # complete release while assets upload. Uploading takes a few minutes and
-          # skill-menu.json lands last, so a live release here would 404 the wizard
-          # for that window. Flipped to published in "Publish release" once every
-          # asset is uploaded.
-          draft: true
-          prerelease: false
-
+      # release-please has already created a draft GitHub Release for RELEASE_TAG
+      # with the CHANGELOG body. Upload every asset onto that draft before flipping
+      # it to published — keeps the invariant that `releases/latest` never points
+      # at an assetless release.
       - name: Upload skills bundle
-        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./dist/skills-mcp-resources.zip
-          asset_name: skills-mcp-resources.zip
-          asset_content_type: application/zip
+        run: gh release upload "$RELEASE_TAG" ./dist/skills-mcp-resources.zip --clobber
 
       - name: Upload individual skill ZIPs and skill menu
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
           # Upload each skill ZIP as a release asset
           for file in dist/skills/*.zip; do
@@ -198,21 +131,15 @@ jobs:
         # moves to the new version — the wizard never sees it without skill-menu.json.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: gh release edit "$RELEASE_TAG" --draft=false --latest
 
       - name: Update latest tag
-        env:
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        # release-please already created and pushed RELEASE_TAG. Only the moving
+        # `latest` tag is ours to manage — point it at the current commit.
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Create the version tag locally first
-          git tag "$RELEASE_TAG"
-          # Point latest to the current commit (same as the version tag)
           git tag -f latest
-          # Push both tags
-          git push origin "$RELEASE_TAG"
           git push -f origin latest
 
       - name: Generate skills repo token
@@ -226,7 +153,6 @@ jobs:
       - name: Push plugins to skills repo
         env:
           SKILLS_REPO_TOKEN: ${{ steps.skills_token.outputs.token }}
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
           MANIFEST="dist/push-manifest.json"
           TARGET_REPO=$(jq -r '.target_repo' "$MANIFEST")
@@ -270,7 +196,6 @@ jobs:
       - name: Push omnibus skills to ai-plugin repo
         env:
           SKILLS_REPO_TOKEN: ${{ steps.skills_token.outputs.token }}
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
           WORK_DIR=$(mktemp -d)
           MEGA_SKILLS="dist/marketplace/plugins/posthog-all/skills"
@@ -304,9 +229,6 @@ jobs:
           rm -rf "$WORK_DIR"
 
       - name: Build Summary
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
           echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -321,3 +243,13 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Individual Skills" >> $GITHUB_STEP_SUMMARY
           ls -lh dist/skills/*.zip >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify Slack of release
+        uses: slackapi/slack-github-action@485a9d42d3a73031f12ec201c457e2162c45d02d # v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_WIZARD_RELEASES }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":rocket: context-mill *<https://github.com/${{ github.repository }}/releases/tag/${{ env.RELEASE_TAG }}|${{ env.RELEASE_TAG }}>* released"
+            }
