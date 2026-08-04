@@ -1,8 +1,19 @@
-name: Build and Release MCP Resources
+name: Build and release
 
 on:
   push:
     branches: [main]
+    # Only fire when release-please's outputs land on main. The release PR
+    # merge is the only merge that touches these three files together —
+    # feature/fix PRs typically don't touch any of them, so the whole
+    # workflow (including check-version) stays silent on non-release merges.
+    # check-version is still the correctness gate for the rare edge case
+    # (e.g. a dependency PR that touches package.json without bumping the
+    # version).
+    paths:
+      - 'package.json'
+      - '.release-please-manifest.json'
+      - 'CHANGELOG.md'
   workflow_dispatch:
 
 # Minimal default; jobs scope up only what they need. build-and-release needs
@@ -189,6 +200,21 @@ jobs:
           git tag -f latest
           git push -f origin latest
 
+      # Fire Slack once the release is genuinely shipped for consumers (draft
+      # flipped to --latest, `latest` git tag moved). The downstream mirror
+      # steps below (PostHog/skills, PostHog/ai-plugin) are useful side
+      # effects but not gating for the wizard, so their failure shouldn't
+      # swallow the release announcement.
+      - name: Notify Slack of release
+        uses: slackapi/slack-github-action@485a9d42d3a73031f12ec201c457e2162c45d02d # v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_WIZARD_RELEASES }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":rocket: context-mill *<https://github.com/${{ github.repository }}/releases/tag/${{ env.RELEASE_TAG }}|${{ env.RELEASE_TAG }}>* released"
+            }
+
       - name: Generate skills repo token
         id: skills_token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
@@ -290,13 +316,3 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Individual Skills" >> $GITHUB_STEP_SUMMARY
           ls -lh dist/skills/*.zip >> $GITHUB_STEP_SUMMARY
-
-      - name: Notify Slack of release
-        uses: slackapi/slack-github-action@485a9d42d3a73031f12ec201c457e2162c45d02d # v2.0.0
-        with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_WIZARD_RELEASES }}
-          webhook-type: incoming-webhook
-          payload: |
-            {
-              "text": ":rocket: context-mill *<https://github.com/${{ github.repository }}/releases/tag/${{ env.RELEASE_TAG }}|${{ env.RELEASE_TAG }}>* released"
-            }
