@@ -58,7 +58,7 @@ Report the variant and the reason in a `[STATUS]` line, then call `install_skill
 
 ## Read four facts from the code
 
-The install doc holds the code. It cannot know this app. Write these answers down. Step 3 uses them and nothing else.
+The install doc holds the code. It cannot know this app. Step 3 uses these answers and nothing else.
 
 1. **Conversation.** The field that groups turns, such as `thread_id` or `conversation_id`. If the app has none, the process run is the conversation.
 2. **User.** The user id in scope at the call sites. If the app has none, the events stay anonymous. Do not invent one.
