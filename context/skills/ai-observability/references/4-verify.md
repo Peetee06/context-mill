@@ -1,37 +1,52 @@
 ---
 next_step: null
 title: AI Observability Setup - Verify
-description: Give the user a concrete way to trigger a generation and confirm it lands in PostHog
+description: Give the user a way to trigger one turn, and grade the tree that reaches PostHog
 ---
 
-You've installed packages and wired OTel init. The last thing this skill produces is a **verification path** the user can run themselves. Don't call the LLM from here — you don't have credentials, and the user should be the one to see the trace show up in their project.
+Give the user a way to run one turn. Do not call the model yourself. You hold no credentials, and the user should watch the trace arrive.
 
-## What to tell the user
+Grade what reaches PostHog, not what the diff contains. A clean diff that produces one trace per call is a failed run.
 
-Point them at the smallest existing code path in their project that hits the vendor SDK. Pick one from what you noted in `1-begin.md`:
+## What correct looks like
 
-- If the project has a script (`scripts/`, `bin/`, a `package.json` script) that calls the LLM, name it: "Run `npm run <script>` (or `python scripts/<file>.py`) to trigger one generation."
-- If the LLM is called from an API route, name the route: "Hit `POST /api/chat` with a test message to trigger one generation."
-- If the LLM lives inside a test, point at that test.
-- If there is no existing call path, sketch a minimal one — a five-line script that imports the client and makes one call — but do not add it to the project unless the user asks. Include it in the report as suggested code.
+Derive the expectation from the four facts in `1-begin.md`:
 
-## What they should see
+- One session holds the turns of one conversation.
+- One trace holds every generation of one turn.
+- A span appears for each tool run, if the app registers tools.
+- The person matches the app's user id, if the app has one.
+- `$ai_provider` names the real provider on a gateway app.
 
-After triggering one call:
+## Tell the user how to trigger it
 
-1. In PostHog, open **Product → LLM Analytics → Generations**.
-2. Filter by the current day and their `service.name` (if the OTel resource was tagged).
-3. A new `$ai_generation` event should appear within a few seconds. Notable properties: `$ai_provider`, `$ai_model`, `$ai_input_tokens`, `$ai_output_tokens`, `$ai_latency`.
-4. If a `posthog.distinct_id` resource attribute was set, the event should be attached to that user in Persons.
+Name the smallest path in the project that runs one turn. Prefer one that calls the model twice or uses a tool, so the tree has depth.
 
-If nothing shows up within a minute:
+- A script: "Run `npm run <script>`."
+- An API route: "Send `POST /api/chat` with a test message."
+- A test that calls the model.
 
-- Confirm the OTel init actually runs — a `console.log` / `print` immediately after `sdk.start()` (or `.instrument()`) proves the entry point loaded it.
-- Confirm the vendor SDK was imported *after* the OTel init in the process's load order.
-- Confirm `POSTHOG_API_KEY` and `POSTHOG_HOST` were set in the env the process is actually running under, not just `.env.example`.
+If no path exists, write one in the report as suggested code. Do not add it to the project unless the user asks.
+
+Then open **LLM Analytics > Traces** in PostHog and open the newest trace. Check it against the list above. A second turn in the same conversation proves the session id groups the turns instead of splitting them.
+
+Before you hand over, run the import the code depends on, such as `python3 -c "from posthog.ai.openai import OpenAI"`. If it fails, go back to `1-begin.md` and pick another variant.
+
+## When it looks wrong
+
+| Symptom | Cause |
+|---|---|
+| One trace per generation | `posthog_trace_id` is missing, or a new id goes to each call |
+| A new session id on every trace | the session id comes from the wrong scope |
+| No session id | `posthog_properties` never reaches the call |
+| `$ai_provider` says `openai` on a gateway | the per-call override is missing |
+| Anonymous person | `posthog_distinct_id` is missing |
+| No tool spans | the `$ai_span` captures are missing or carry another trace id |
+| Nothing arrives | the code still calls the vendor client, the key or host is unset, or a short script exits before the flush |
 
 ## Do not
 
-- Do not run the vendor SDK yourself.
-- Do not embed API keys anywhere to enable a smoke test.
-- Do not claim the integration works until the user has confirmed a generation shows up. Report it as "wired, unverified" if you never got confirmation — the report step will surface that.
+- Do not run the vendor SDK.
+- Do not put an API key in any file.
+- Do not report a run as done while an import fails.
+- Do not claim the setup works before the user confirms what landed. Report it as "wired, unverified" instead.

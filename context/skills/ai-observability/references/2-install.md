@@ -1,76 +1,41 @@
 ---
-next_step: 3-otel-setup.md
+next_step: 3-instrument.md
 title: AI Observability Setup - Install
-description: Add the OpenTelemetry SDK, PostHog span processor, and provider instrumentation to the manifest
+description: Declare the packages the variant needs, and no others
 ---
 
-Declare the packages this variant needs in the project's manifest. Do not run the package manager here — the base integration's build/verify step (or the user) installs everything in one pass.
+Declare the packages in the project manifest. Do not run the package manager. The build step installs them later.
 
-Read the manifest first. If any of the required packages is already declared, leave the existing version alone and say so. Match the style of dependencies already in the file (versions, ordering, dev vs. runtime).
+Read the manifest first. If a package is already there, keep its version and say so in the report. Match the style of the entries around it.
 
-## What to add
+## Providers and gateways
 
-The linked install page for this variant carries the authoritative command. The shapes below reflect the current defaults across Tier-1 providers.
+Every provider and every OpenAI-compatible gateway needs the PostHog SDK next to the vendor SDK.
 
-### Python — the standard OTel path
+| Runtime | Packages |
+|---|---|
+| Python | `posthog` |
+| Node | `@posthog/ai`, `posthog-node` |
 
-Three packages:
+**Do not add OpenTelemetry packages.** The wrapper path needs none. If you reach for `opentelemetry-sdk`, `posthog[otel]`, or an `opentelemetry-instrumentation-*` package, you picked the wrong mechanism. Go back to `3-instrument.md`.
 
-```
-posthog[otel]                                   # PostHog SDK + span processor
-opentelemetry-sdk                               # OTel core
-opentelemetry-instrumentation-<provider>        # provider auto-instrumentation
-```
+The vendor SDK is already in the manifest. Do not add or upgrade it.
 
-Examples:
+Portkey also needs `portkey-ai`.
 
-- OpenAI → `opentelemetry-instrumentation-openai-v2`
-- Anthropic → `opentelemetry-instrumentation-anthropic`
-- LangChain → `opentelemetry-instrumentation-langchain`
-- Google Gemini → `opentelemetry-instrumentation-google-generativeai`
+## Other variants
 
-The vendor SDK itself (`openai`, `anthropic`, `langchain`, …) is a prerequisite — it should already be declared. Do not add or upgrade it.
+| Variant | Packages |
+|---|---|
+| Agent frameworks | The list the install doc names |
+| `opentelemetry-*`, LlamaIndex, AWS Bedrock | The OTel packages the install doc names |
+| `manual-capture` | `posthog` or `posthog-node` |
 
-### Node — the standard OTel path
+AWS Bedrock has no wrapper client. It instruments the AWS SDK through OpenTelemetry, so its package list differs from every other provider.
 
-```
-@posthog/ai                                     # PostHog span processor
-@opentelemetry/sdk-node                         # OTel core (Node)
-@opentelemetry/resources                        # resource attributes
-@opentelemetry/instrumentation-<provider>       # provider auto-instrumentation
-```
+## Do not
 
-Provider instrumentation packages:
-
-- OpenAI → `@opentelemetry/instrumentation-openai`
-- Anthropic → `@traceloop/instrumentation-anthropic`
-- LangChain → `@traceloop/instrumentation-langchain`
-- Google Gemini → `@traceloop/instrumentation-google-generativeai`
-
-### Vercel AI SDK (Node)
-
-No provider instrumentation package — Vercel AI emits OTel spans natively when `experimental_telemetry` is enabled. Just add:
-
-```
-@posthog/ai
-@opentelemetry/sdk-node
-@opentelemetry/resources
-```
-
-### `manual-capture` variant
-
-No OTel packages. Just PostHog core:
-
-```
-posthog                # Python
-posthog-node           # Node
-```
-
-If PostHog core is already installed (it should be — see `1-begin.md`), this file has nothing to add. Skip to `3-otel-setup.md`, which describes the manual `capture(...)` call shape.
-
-## Do not do
-
-- Do not run `npm install` / `pip install` here.
+- Do not run `npm install` or `pip install`.
 - Do not edit the lockfile.
 - Do not upgrade the vendor SDK.
-- Do not add both an OTel-based instrumentation package *and* the older wrapper client — pick one. This skill uses the OTel path.
+- Do not add OpenTelemetry to a wrapper variant.

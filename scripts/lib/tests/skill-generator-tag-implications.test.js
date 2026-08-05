@@ -37,4 +37,11 @@ describe('collectCommandments', () => {
         const rules = collectCommandments(['react-native', 'typescript'], config);
         expect(rules).toEqual(['mobile rule']);
     });
+
+    it('emits a tag\'s rules once when the tag is repeated', () => {
+        // Variants inherit group-level tags and may re-declare them, so the
+        // merged list can carry the same tag twice.
+        const rules = collectCommandments(['nextjs', 'javascript', 'nextjs'], config);
+        expect(rules).toEqual(['nextjs rule', 'root rule']);
+    });
 });

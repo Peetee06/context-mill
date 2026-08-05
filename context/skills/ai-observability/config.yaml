@@ -12,6 +12,8 @@ shared_docs:
   - https://posthog.com/docs/ai-observability/basics.md
   - https://posthog.com/docs/ai-observability/generations.md
   - https://posthog.com/docs/ai-observability/traces.md
+  - https://posthog.com/docs/ai-observability/sessions.md
+  - https://posthog.com/docs/ai-observability/spans.md
 variants:
   - id: openai-python
     framework: openai

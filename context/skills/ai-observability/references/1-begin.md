@@ -1,52 +1,70 @@
 ---
 next_step: 2-install.md
 title: AI Observability Setup - Begin
-description: Pick the right variant, confirm prerequisites, and locate the LLM call sites before editing
+description: Pick the variant that matches this project, then read the four facts the instrumentation needs
 ---
 
-Before touching any code, decide which variant of this skill to install, confirm the two prerequisites, and get a read on where in the project LLM calls actually happen. AI Observability instruments an existing setup — if the setup isn't there, this skill can't do its job.
+Pick the variant, then read the code. Do not edit anything in this step.
 
 ## Pick the variant
 
-The `ai-observability` skill has one variant per LLM provider × language (e.g. `ai-observability-openai-python`, `ai-observability-anthropic-node`, …). You are running the group-level entry; before installing, pick the specific variant that matches this project.
+This skill ships 68 variants. Call `load_skill_menu` with `category: "ai-observability"`. That list is the source of truth.
 
-Scan the manifest (`package.json`, `pyproject.toml`, `requirements.txt`, `Gemfile`) for a vendor LLM package. Typical package names:
+Apply these rules in order. The first match wins. Frameworks wrap providers, and gateways look like OpenAI, so the order matters.
 
-- OpenAI — `openai`
-- Anthropic — `@anthropic-ai/sdk` (Node) or `anthropic` (Python)
-- LangChain — `langchain` / `@langchain/core` (plus a provider adapter like `langchain-openai` / `@langchain/openai`)
-- Vercel AI SDK — `ai` (plus a provider like `@ai-sdk/openai`)
-- Google Gemini — `google-genai` (Python) or `@google/genai` (Node)
+### 1. A framework wins over the provider under it
 
-Decision rules — apply in order:
+| Package in the manifest | Variant |
+|---|---|
+| `openai-agents` | `openai-agents` |
+| `claude-agent-sdk` | `claude-agent-sdk` |
+| `langchain`, `@langchain/core` | `langchain-{python,node}` |
+| `langgraph`, `@langchain/langgraph` | `langgraph-{python,node}` |
+| `ai` (Vercel AI SDK) | `vercel-ai` |
+| `llama-index`, `llamaindex` | `llamaindex` |
+| `crewai` | `crewai` |
+| `pyautogen`, `autogen-agentchat` | `autogen` |
+| `dspy`, `dspy-ai` | `dspy` |
+| `pydantic-ai` | `pydantic-ai` |
+| `semantic-kernel` | `semantic-kernel` |
+| `smolagents` | `smolagents` |
+| `mirascope` | `mirascope` |
+| `instructor` | `instructor-{python,node}` |
+| `litellm` | `litellm` |
+| `mastra`, `@mastra/core` | `mastra` |
+| `convex` | `convex` |
 
-1. **Exactly one vendor SDK found** → pick the corresponding variant. Language follows the manifest (`package.json` → Node, `pyproject.toml`/`requirements.txt` → Python). Tell the user which variant you picked and why in a `[STATUS]` line, then call `install_skill` with the full variant id (e.g. `ai-observability-openai-python`).
-2. **Multiple vendor SDKs found** (e.g. LangChain wraps OpenAI, so both may be declared) → prefer the higher-level abstraction: LangChain > direct provider SDK. If still ambiguous, use `wizard_ask` to have the user pick, listing the candidates as options.
-3. **No vendor SDK found** → install `ai-observability-manual-capture`. This variant posts `$ai_generation` events explicitly and works without any auto-instrumentation.
-4. **You're not sure** → `wizard_ask` the user with a multi-choice picker listing every provider you have a variant for. Do not guess when there's real ambiguity.
+Instrument the framework, not the provider below it. A provider instrumentor keeps the model calls and loses the agent, tool, and handoff structure.
 
-## Check for an existing PostHog setup (informational — not a blocker)
+### 2. An `openai` client with a base URL override means a gateway
 
-Grep the project for one of:
+Most OpenAI-compatible providers ship no SDK. Apps call them with the `openai` package aimed at another host. Check the client constructor and `OPENAI_BASE_URL`. Common hosts are `api.groq.com`, `openrouter.ai`, `api.together.xyz`, and `localhost:11434`.
 
-- `posthog.init(` — most JS/TS SDKs
-- `PostHog(` — Python, Ruby, Go SDK constructors
-- `AddPostHog(` — .NET DI registration
+Pick the variant that names the provider. The install shape matches plain OpenAI, but the provider name does not. Step 3 explains why that matters.
 
-**This is not a prerequisite.** The OTel-based variants use `PostHogSpanProcessor`, a self-contained exporter that just takes an API key + host — it does not depend on a `posthog.init(...)` call anywhere. The `manual-capture` variant uses `posthog.capture(...)`, which needs the traditional SDK, but the install step will add it if it isn't there.
+### 3. A plain provider SDK maps to that provider
 
-If a `posthog.init(...)` (or equivalent) **is** already present, note the env-var names it reads (`POSTHOG_API_KEY`, `NEXT_PUBLIC_POSTHOG_KEY`, etc.) and reuse them in `3-otel-setup.md` — don't invent parallel names. If nothing is there, `3-otel-setup.md` will set fresh values via `set_env_values`.
+`openai`, `anthropic`, `@anthropic-ai/sdk`, `google-genai`, `@google/genai`, `mistralai`, and `cohere` each have a variant. `boto3` with `bedrock-runtime` maps to `aws-bedrock`.
 
-## Locate the LLM call sites
+### 4. Anything else
 
-Grep for where the vendor SDK is imported and called. This is not a full analysis — one or two representative sites is enough for you to reason about where OTel initialization has to run before those calls execute:
+- Several candidates and no framework: prefer the higher-level one. If it stays unclear, use `wizard_ask` with the candidates as options.
+- The app already emits its own OTel spans: `opentelemetry-{python,node}`.
+- No LLM SDK at all: `manual-capture`.
 
-- OpenAI: `import OpenAI`, `openai.OpenAI(`, `new OpenAI(`
-- Anthropic: `Anthropic(`, `new Anthropic(`
-- LangChain: `ChatOpenAI(`, `from langchain`, `import { ChatOpenAI } from '@langchain/openai'`
-- Vercel AI: `generateText(`, `streamText(`, `import ... from 'ai'`
-- Google Gemini: `genai.Client(`, `new GoogleGenerativeAI(`
+Language follows the manifest. A `package.json` means Node. A `pyproject.toml` or `requirements.txt` means Python. Framework variants have no language suffix.
 
-Note the app's entry point (server startup file, `main.py`, `index.ts`, `instrumentation.ts` in Next.js, etc.) — OTel must be initialized *before* the vendor SDK is imported, and the entry point is where that happens.
+Report the variant and the reason in a `[STATUS]` line, then call `install_skill` with the full id.
 
-Do not edit yet. Once you have a note of the entry point and the call sites, move on to `2-install.md`.
+## Read four facts from the code
+
+The install doc holds the code. It cannot know this app. Step 3 uses these answers and nothing else.
+
+1. **Conversation.** The field that groups turns, such as `thread_id` or `conversation_id`. If the app has none, the process run is the conversation.
+2. **User.** The user id in scope at the call sites. If the app has none, the events stay anonymous. Do not invent one.
+3. **Turn.** The function that takes one question and returns one answer. It may call the model several times.
+4. **Tools.** Does the app register tools with its calls? Look for a `tools=` argument or a tool decorator. Find the loop that runs them.
+
+Note the module that builds the vendor client. Step 3 replaces that constructor. If the project already calls `posthog.init(...)` or `PostHog(...)`, reuse its env-var names and its client.
+
+Go to `2-install.md`.
