@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.43.0](https://github.com/PostHog/context-mill/compare/v1.42.1...v1.43.0) (2026-08-05)
+
+
+### Features
+
+* **ai-observability:** rebuild the skill around the SDK wrapper and the session tree ([3b0d5ba](https://github.com/PostHog/context-mill/commit/3b0d5ba5b599353ce384cfc9a7e5bf196a58aa7b))
+
+
+### Bug Fixes
+
+* **ci:** address review of the signed-commit swap ([e234269](https://github.com/PostHog/context-mill/commit/e234269c672fa98956e90bda2afe92c7af5f860a))
+* **ci:** sign the commits this workflow creates ([329044a](https://github.com/PostHog/context-mill/commit/329044ad844237e3389d3287187561865b942df1))
+* **ci:** sign the commits this workflow creates ([0cb32fe](https://github.com/PostHog/context-mill/commit/0cb32fe87241cd8c9b50f93a57192076aa096cb4))
+
 ## [1.42.1](https://github.com/PostHog/context-mill/compare/v1.42.0...v1.42.1) (2026-08-04)
 
 
