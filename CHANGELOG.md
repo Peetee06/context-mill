@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.43.1](https://github.com/PostHog/context-mill/compare/v1.43.0...v1.43.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* **ai-observability:** keep .env.example out of .gitignore ([454f5f1](https://github.com/PostHog/context-mill/commit/454f5f1bbfb2e203eda035e282344c85cf52b55a))
+* **ai-observability:** keep .env.example out of .gitignore ([a8c1d54](https://github.com/PostHog/context-mill/commit/a8c1d54e8eab531ef5955b8f2913e59ff31909df))
+
 ## [1.43.0](https://github.com/PostHog/context-mill/compare/v1.42.1...v1.43.0) (2026-08-05)
 
 
