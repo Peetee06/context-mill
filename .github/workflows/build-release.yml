@@ -352,6 +352,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.skills_token.outputs.token }}
 
+      # Both clones embed the App token in their remote URL and now live in the
+      # workspace rather than a mktemp dir, so drop them before any later step runs.
+      - name: Remove the mirror clones
+        if: always()
+        run: rm -rf "$GITHUB_WORKSPACE/.skills-push" "$GITHUB_WORKSPACE/.ai-plugin-push"
+
       - name: Build Summary
         run: |
           echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
