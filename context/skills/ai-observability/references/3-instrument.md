@@ -16,7 +16,7 @@ Keep the setup at module level, next to the existing client. Under ten lines is 
 - Do not add module globals.
 - Do not add a presence check that raises. `os.environ["POSTHOG_API_KEY"]` already fails loudly when the key is unset.
 
-Route the token and host through env vars with `set_env_values`. Reuse the names the project already uses. Add the names to `.env.example` with empty values. Never write a real key to a file.
+Route the token and host through env vars with `set_env_values`. Reuse the names the project already uses. Add the names to `.env.example` with empty values. Never write a real key to a file. `.env.example` is documentation and must stay committed — if you edit `.gitignore`, ignore only `.env`, never `.env.example`.
 
 Agent frameworks use their own tracing hook in place of a wrapper. Take it from the install doc. Do not substitute an OTel instrumentor.
 
