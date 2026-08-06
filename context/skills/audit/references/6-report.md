@@ -2,9 +2,9 @@
 next_step: null
 ---
 
-# Step 5 — Generate the audit report (and upload it to a notebook)
+# Step 6 — Generate the audit report (and upload it to a notebook)
 
-The audit report is rendered **directly from `.posthog-audit-checks.json`** — that file is the source of truth. Every check the wizard seeded ends up in the report, even passes; nothing is invented. After the markdown is written to disk, this step also writes the report into a PostHog notebook so it's shareable from inside PostHog.
+The audit report is rendered **directly from `.posthog-audit-checks.json`** — that file is the source of truth. Every check in the ledger ends up in the report, even passes; nothing is invented. That includes the rows the live-data step appended from PostHog's own findings, which arrive at runtime rather than from the wizard's seed. After the markdown is written to disk, this step also writes the report into a PostHog notebook so it's shareable from inside PostHog.
 
 ## Status
 
@@ -39,11 +39,11 @@ If `info notebook-edit` returns a not-found error, the project's `notebooks-coll
 The report has four sections in this order:
 
 1. **Summary** — one-paragraph overview, severity counts, and a problematic-items table.
-2. **Recommended actions** — prioritized fixes with `file:line` and a docs link per item.
+2. **Recommended actions** — prioritized fixes with `file:line` and a docs link per item. Rows with no `file` (everything from the live-data step — those findings come from ingested data, not a line of source) simply omit the location; don't invent one, and don't go looking for it.
 3. **Full audit** — every check the wizard ran, grouped by `area`, including passes.
 4. **About this audit** — a short closing block explaining what the audit covered and how to interpret the report. *Static text — already baked into the skeleton.*
 
-For the Full audit section, group rows dynamically by each distinct `area` value in the ledger, preserving first-seen area order from the JSON. Today the core audit produces three areas — **Installation**, **Identification**, **Event Capture** — but the report must not hard-code that list; render whatever areas appear.
+For the Full audit section, group rows dynamically by each distinct `area` value in the ledger, preserving first-seen area order from the JSON. **Render whatever areas appear — never hard-code the list**, and never assume a count. The **Live Data** area in particular varies per project: the live-data step appends a row per open finding, so a healthy project has one row there and a neglected one has eight.
 
 For each area, write a one-paragraph framing immediately under the area heading, then the table. Use the canonical copy below verbatim when the area name matches; otherwise write a one-sentence summary derived from the area's check labels.
 
@@ -68,7 +68,7 @@ One `Write` to `posthog-audit-report.md` with section headings and HTML-comment 
 
 ## About this audit
 
-The PostHog wizard runs a five-stage chain: SDK installation → init correctness → identification → event capture → this report. Each stage resolves one or more checks against the project's source tree, recording every result — pass or otherwise — in the ledger this report was generated from.
+The PostHog wizard runs this audit in stages: SDK installation → init correctness → identification → event capture → live data → this report. The early stages resolve checks against the project's source tree. The live-data stage reads what PostHog already computed from your ingested data — things no source scan can see, like whether stack frames actually resolve. Every result, pass or otherwise, is recorded in the ledger this report was generated from.
 
 - `error` items break correctness now (events lost, identity broken). Fix first.
 - `warning` items work today but cause subtle data-quality bugs. Fix when convenient.
@@ -162,6 +162,17 @@ For each `area` from the ledger, in first-seen order:
 
 [Per the investigation standards in `posthog-best-practices/references/investigation-standards.md`, standard 3. ≤4 sentences answering: which code paths were not checked, which runtime assumptions are unproven by static code, what alternative explanations exist for the patterns found, and what to verify in the live PostHog project to confirm the most important findings. When the area produced only `pass` rows, write `_No findings to qualify; the standard checks for this area passed cleanly._` instead.]
 ```
+
+### Canonical area copy
+
+Use these paragraphs verbatim as the area framing, both in the markdown report and in the notebook's `__FULL_AUDIT_<AREA>_PARAGRAPH__` nodes. Match on the ledger's `area` value. For an area not listed here, write one short sentence summarizing what its checks verify.
+
+- **Installation** — Whether the PostHog SDK is present, current, and initialized the way the framework expects. Everything downstream depends on this: a missing or stale SDK silently changes which events exist and which config options are honoured.
+- **Identification** — Whether the same human maps to one stable `distinct_id` across sessions, runtimes, and logins. Identity defects are the most expensive kind to fix after the fact, because they corrupt person counts, funnels, and retention retroactively rather than going forward.
+- **Event Capture** — Whether events are named consistently, reach PostHog reliably, and cover the moments the business actually reasons about. Gaps here don't break anything visibly; they just leave the questions you want to ask unanswerable.
+- **Live Data** — What PostHog itself has already flagged for this project, read from its recommendations and health checks. These come from ingested data rather than source code, so they catch problems no static scan can see — stack frames that never resolve, syncs that keep failing, alerts nobody wired up.
+
+For **Live Data**, the "Assumptions and blind spots" subsection has a standing caveat worth stating: these findings reflect what PostHog has observed in the recent lookback window, so a project that has just started sending data, or one whose findings haven't been recomputed yet, can show a clean area without being clean.
 
 After the report is written, emit a line so the wizard can surface the path to the user:
 
@@ -324,7 +335,7 @@ What `new_value` looks like for each placeholder family:
 | `__FULL_AUDIT_<AREA>_HEADING__` | A level-3 `heading` with the area name (e.g. `Installation`). |
 | `__FULL_AUDIT_<AREA>_PARAGRAPH__` | A single `paragraph` with the canonical area framing (see "Canonical area copy" below). |
 | `__FULL_AUDIT_<AREA>_TABLE__` | A `table` with header row (Check / Status / File / Details) + one row per check in that area, in ledger order. |
-| `__ABOUT_PARAGRAPH__` | A single `paragraph` with the canonical opening sentence about the five-stage chain. |
+| `__ABOUT_PARAGRAPH__` | A single `paragraph` with the canonical opening sentence about the audit's stages. |
 | `__ABOUT_BULLETS__` | A `bulletList` with the three error/warning/suggestion description bullets. |
 | `__ABOUT_CLOSING__` | A single `paragraph` with the "Re-run posthog-wizard audit" closing sentence. |
 
@@ -372,7 +383,7 @@ Flip the `upload-notebook` row based on outcome:
 }
 ```
 
-Then delete the ledger — it's transient scratch state and all 12 rows are now resolved:
+Then delete the ledger — it's transient scratch state and every row is now resolved:
 
 ```
 Bash: rm -f .posthog-audit-checks.json
