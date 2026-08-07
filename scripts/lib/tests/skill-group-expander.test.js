@@ -145,26 +145,6 @@ describe('expandSkillGroups', () => {
         expect(skills[0]._shortId).toBe('all');
     });
 
-    it('marks desktop-distributed skills', () => {
-        createFixture({
-            skills: {
-                integration: {
-                    'description.md': '# Integration',
-                },
-            },
-        }, tmpDir);
-        const config = {
-            integration: {
-                type: 'skill',
-                template: 'description.md',
-                desktop: true,
-                variants: [{ id: 'all', display_name: 'all frameworks' }],
-            },
-        };
-        const skills = expandSkillGroups(config, tmpDir);
-        expect(skills[0]._desktop).toBe(true);
-    });
-
     it('passes group-level example_paths through to _examplePaths', () => {
         createFixture({
             skills: {

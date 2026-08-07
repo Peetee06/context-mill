@@ -141,7 +141,6 @@ function generateManifest({ resources, uriSchema, version, docContents = {} }) {
                 description: skill.description,
                 tags: skill.tags,
                 uri,
-                ...(skill.desktop ? { desktop: true } : {}),
             };
 
             if (isGuide) {

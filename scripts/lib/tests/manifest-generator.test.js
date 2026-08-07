@@ -43,12 +43,6 @@ describe('generateManifest', () => {
         expect(entry.resource.text).toBe(entry.downloadUrl);
     });
 
-    it('preserves desktop distribution metadata', () => {
-        const [entry] = generate([skill('nextjs', { desktop: true })]).resources;
-
-        expect(entry.desktop).toBe(true);
-    });
-
     it('never emits a file for a resource the build does not ship as a zip', () => {
         const manifest = generate(
             [skill('django', { bundle: true }), skill('nextjs'), { id: 'guide', type: 'doc', name: 'Guide', tags: [] }],

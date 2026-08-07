@@ -340,7 +340,6 @@ function expandSkillGroups(config, configDir) {
                 _group: key,
                 _bundle: bundled,
                 _cli: cli,
-                _desktop: variation.desktop ?? group.desktop ?? false,
             });
         }
     }
@@ -825,9 +824,6 @@ function serializeSkill(s) {
     }
     if (s._cli) {
         result.cli = s._cli;
-    }
-    if (s._desktop) {
-        result.desktop = true;
     }
     return result;
 }
