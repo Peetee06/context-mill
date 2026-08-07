@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.45.0](https://github.com/PostHog/context-mill/compare/v1.44.0...v1.45.0) (2026-08-07)
+
+
+### Features
+
+* declare desktop skill distribution in the manifest ([9b953db](https://github.com/PostHog/context-mill/commit/9b953db8bd8033ade7f80deca3c7dc6f692e5082))
+
+
+### Bug Fixes
+
+* expose product tours skill across consumers ([8c7f435](https://github.com/PostHog/context-mill/commit/8c7f4352b09663cbfbd8a491653e75abc1de86c6))
+* expose product tours skill across consumers ([284348e](https://github.com/PostHog/context-mill/commit/284348ecef79cbfbd8d50430bc0eb39297dbad81))
+
+
+### Reverts
+
+* remove desktop distribution metadata ([7b43e56](https://github.com/PostHog/context-mill/commit/7b43e567b03e273b4bdd73f7d8028f2eaaca6a39))
+
 ## [1.44.0](https://github.com/PostHog/context-mill/compare/v1.43.1...v1.44.0) (2026-08-06)
 
 
