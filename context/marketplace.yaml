@@ -24,6 +24,12 @@ plugins:
     destination: skills/posthog/feature-flags
     keywords: [posthog, feature-flags, experiments, ab-testing]
 
+  creating-product-tours:
+    name: posthog-product-tours
+    description: Build custom in-app product tours with PostHog feature flags and events
+    destination: skills/posthog/product-tours
+    keywords: [posthog, product-tours, onboarding, feature-flags]
+
   llm-analytics:
     name: posthog-llm-analytics
     description: Skills for monitoring LLM usage with PostHog
