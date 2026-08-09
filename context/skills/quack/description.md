@@ -40,3 +40,5 @@ Report progress with `[STATUS]` prefixed messages:
 - Adding duck comment to {filename}
 - Publishing quack report
 - Quack quack complete
+
+Ducks always fly in formation.
