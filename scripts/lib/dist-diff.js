@@ -446,7 +446,7 @@ function fullSections(model, changes) {
             if (consistent) {
                 return {
                     title: `\`${AGGREGATE_PATH}\` — aggregate`,
-                    hunks: [`(consistent with its constituents — ${summary}, diffed in the sections above)`],
+                    note: `✓ consistent with its constituents — ${summary}, diffed in the sections above`,
                     members: null,
                 };
             }
@@ -497,7 +497,11 @@ export function renderFull(model) {
         // collapsed (the noise). Report-wide hunk budget — the step summary
         // rejects anything over 1MB.
         let omitted = 0;
-        for (const { title, hunks, members } of fullSections(model, changes)) {
+        for (const { title, hunks, note, members } of fullSections(model, changes)) {
+            if (note) {
+                lines.push(`### ${title}`, '', note, '');
+                continue;
+            }
             if (hunkBudget <= 0) { omitted++; continue; }
             hunkBudget -= hunks.length;
             lines.push(`### ${title}`, '', '```diff', ...hunks, '```', '');

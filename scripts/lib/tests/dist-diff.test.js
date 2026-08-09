@@ -390,7 +390,8 @@ describe('renderComment', () => {
         const full = renderFull(model);
 
         expect(comment).toMatch(/skills-mcp-resources\.zip — aggregate, consistent with/i);
-        expect(full).toMatch(/consistent with its constituents/i);
+        expect(full).toMatch(/^✓ consistent with its constituents/m);   // plaintext line, not a code block
+        expect(full).not.toMatch(/```diff\n\(consistent/);
         // The constituent's hunk appears once (its own section), not again for the aggregate.
         expect(full.match(/-v1/g)).toHaveLength(1);
     });
