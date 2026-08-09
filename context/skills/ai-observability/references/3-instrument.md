@@ -68,3 +68,5 @@ An app that registers no tools has no spans. That is a complete result, not a ga
 - Do not leave a gateway reporting `$ai_provider` as `openai`.
 - Do not add spans when the app registers no tools.
 - Do not ship code whose imports fail. Go back to `1-begin.md` and pick another variant.
+
+Always verify instrumentation in a staging environment first.
