@@ -190,6 +190,25 @@ function stripSurfacePrefix(surfaceKey, path) {
     return prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
 }
 
+/**
+ * skills-mcp-resources.zip is DERIVED: it bundles manifest.json plus every
+ * skill zip/bundle, so its diff can never carry new information — unless the
+ * bundling step broke. Verify each inner change maps to a reported
+ * constituent change (inner `x.zip` ↔ `skills/x.zip`); consistent means the
+ * one-line summary is a checked claim, not an assumption.
+ */
+const AGGREGATE_PATH = 'skills-mcp-resources.zip';
+
+function aggregateConsistency(model, change) {
+    const changedPaths = new Set(model.changes.map(c => c.path));
+    const inner = change.innerChanges ?? [];
+    const unexplained = inner.filter(name => !changedPaths.has(`skills/${name}`));
+    const zips = inner.filter(name => name.endsWith('.zip')).length;
+    const summary = [zips && `${zips} zip(s)`, inner.length - zips && `${inner.length - zips} other file(s)`]
+        .filter(Boolean).join(', ');
+    return { consistent: unexplained.length === 0, unexplained, summary };
+}
+
 /** Grouping key for a changed artifact: same key ⇔ identical delta. */
 function deltaKey(change) {
     return change.innerChanges
@@ -310,7 +329,7 @@ export function renderComment(model, { fullReportUrl } = {}) {
         }
         const { block, after } = surface.key === 'wizard'
             ? { block: wizardBlock(model), after: [] }
-            : surfaceBlock(changes, surface.key);
+            : surfaceBlock(model, changes, surface.key);
         segments.push({ head: [`**${surface.title}**`], block, after });
     }
 
@@ -422,6 +441,21 @@ function fullSections(model, changes) {
     }
     return [...groups.values()].map(members => {
         const rep = members[0];
+        if (rep.path === AGGREGATE_PATH && rep.kind === 'changed') {
+            const { consistent, unexplained, summary } = aggregateConsistency(model, rep);
+            if (consistent) {
+                return {
+                    title: `\`${AGGREGATE_PATH}\` — aggregate`,
+                    hunks: [`(consistent with its constituents — ${summary}, diffed in the sections above)`],
+                    members: null,
+                };
+            }
+            return {
+                title: `⚠️ \`${AGGREGATE_PATH}\` — aggregate diverges from its constituents`,
+                hunks: [`unexplained inner change(s): ${unexplained.join(', ')}`, ...changeHunks(model, rep)],
+                members: null,
+            };
+        }
         const isZip = rep.path.endsWith('.zip');
         let title;
         if (members.length > 1) {
@@ -488,13 +522,23 @@ export function renderFull(model) {
  */
 const GROUP_MIN = 4;
 
-function surfaceBlock(changes, surfaceKey) {
+function surfaceBlock(model, changes, surfaceKey) {
     const block = [];
     const after = [];
     const singles = [];
     const exactGroups = new Map();
     const dirBuckets = new Map();
     for (const change of changes) {
+        if (change.path === AGGREGATE_PATH && change.kind === 'changed') {
+            const { consistent, unexplained, summary } = aggregateConsistency(model, change);
+            if (consistent) {
+                block.push(`~ ${AGGREGATE_PATH} — aggregate, consistent with its constituents (${summary}, reported above)`);
+            } else {
+                block.push(`~ ⚠️ ${AGGREGATE_PATH} — ${unexplained.length} inner change(s) no constituent explains: ${capList(unexplained)}`);
+                singles.push(change);
+            }
+            continue;
+        }
         if (change.kind === 'changed' && change.deltaHash) {
             const key = deltaKey(change);
             if (!exactGroups.has(key)) exactGroups.set(key, []);

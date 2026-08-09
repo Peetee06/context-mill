@@ -367,6 +367,47 @@ describe('renderComment', () => {
         expect(full).toContain('-goodbye content');
     });
 
+    it('summarizes the aggregate bundle as one verified line when its changes match its constituents', async () => {
+        const oldSkill = { 'SKILL.md': 'v1' };
+        const newSkill = { 'SKILL.md': 'v2' };
+        writeTree(before, {
+            'skills/web-analytics.zip': await zipBuffer(oldSkill),
+            'skills-mcp-resources.zip': await zipBuffer({
+                'manifest.json': JSON.stringify({ resources: [] }),
+                'web-analytics.zip': await zipBuffer(oldSkill),
+            }),
+        });
+        writeTree(after, {
+            'skills/web-analytics.zip': await zipBuffer(newSkill),
+            'skills-mcp-resources.zip': await zipBuffer({
+                'manifest.json': JSON.stringify({ resources: [] }),
+                'web-analytics.zip': await zipBuffer(newSkill),
+            }),
+        });
+
+        const model = await diffDistTrees(before, after);
+        const comment = renderComment(model);
+        const full = renderFull(model);
+
+        expect(comment).toMatch(/skills-mcp-resources\.zip — aggregate, consistent with/i);
+        expect(full).toMatch(/consistent with its constituents/i);
+        // The constituent's hunk appears once (its own section), not again for the aggregate.
+        expect(full.match(/-v1/g)).toHaveLength(1);
+    });
+
+    it('goes loud when the aggregate contains a change no constituent explains', async () => {
+        writeTree(before, {
+            'skills-mcp-resources.zip': await zipBuffer({ 'phantom.zip': await zipBuffer({ 'SKILL.md': 'v1' }) }),
+        });
+        writeTree(after, {
+            'skills-mcp-resources.zip': await zipBuffer({ 'phantom.zip': await zipBuffer({ 'SKILL.md': 'v2' }) }),
+        });
+
+        const model = await diffDistTrees(before, after);
+        expect(renderComment(model)).toMatch(/⚠️.*phantom\.zip/);
+        expect(renderFull(model)).toMatch(/⚠️.*diverges/i);
+    });
+
     it('golden: the PR #330 shape — menu/marketplace/mirror changes surface, stamp and mtime noise does not', async () => {
         const menu = entries => JSON.stringify({ cliEntries: entries });
         const baseEntries = [{ skillId: 'audit-events', role: 'command', parentCommand: 'audit', command: 'events' }];
