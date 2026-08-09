@@ -293,6 +293,60 @@ describe('renderComment', () => {
         expect(full).toContain('+zip v2');
     });
 
+    it('does not fold root-level files into directory buckets (empty-dir key is a prefix of every key)', async () => {
+        const afterFiles = {};
+        for (let i = 0; i < 3; i++) afterFiles[`root-${i}.bin`] = `r${i}`;
+        for (let i = 0; i < 4; i++) afterFiles[`deep/nested/f${i}.bin`] = `n${i}`;
+        writeTree(before, { 'keep.txt': 'x' });
+        writeTree(after, { 'keep.txt': 'x', ...afterFiles });
+
+        const comment = renderComment(await diffDistTrees(before, after));
+
+        expect(comment).toMatch(/deep\/nested\/ — 4 files added/);
+        expect(comment).not.toMatch(/^\+ {2}— \d+ files/m);       // no nameless bucket
+        expect(comment).toMatch(/^\+ root-0\.bin/m);              // root files itemized
+    });
+
+    it('keeps every surface assertion visible when the budget forces truncation', async () => {
+        const beforeFiles = {}, afterFiles = {};
+        // Distinct inner-file names per zip, so no grouping tier can collapse them.
+        for (let i = 0; i < 60; i++) {
+            beforeFiles[`skills/skill-${i}.zip`] = await zipBuffer({ [`ref-${i}.md`]: `old ${i}` });
+            afterFiles[`skills/skill-${i}.zip`] = await zipBuffer({ [`ref-${i}.md`]: `new ${i}` });
+        }
+        writeTree(before, beforeFiles);
+        writeTree(after, afterFiles);
+
+        const comment = renderComment(await diffDistTrees(before, after), { fullReportUrl: 'https://x' });
+        const lines = comment.split('\n');
+
+        expect(lines.length).toBeLessThanOrEqual(40);
+        // Truncation must spend block content, never the surface assertions.
+        for (const title of ['Wizard surface', 'Marketplace', 'Agents', 'MCP manifest', 'Skills-repo mirror']) {
+            expect(comment).toContain(`**${title}** ✓ unchanged`);
+        }
+        expect(comment).toMatch(/more .*full report/i);
+        expect(lines.filter(l => l.startsWith('```')).length % 2).toBe(0);  // fences balanced
+    });
+
+    it('caps content hunks by decompressed inner-entry size, not archive size', async () => {
+        const big = 'line\n'.repeat(80_000);   // ~400KB decompressed, tiny compressed
+        writeTree(before, { 'skills/a.zip': await zipBuffer({ 'huge.md': big }) });
+        writeTree(after, { 'skills/a.zip': await zipBuffer({ 'huge.md': `${big}tail\n` }) });
+
+        const full = renderFull(await diffDistTrees(before, after));
+        expect(full).toMatch(/too large to diff/i);
+    });
+
+    it('full report shows content for added and removed files', async () => {
+        writeTree(before, { 'skills/old-note.md': 'goodbye content' });
+        writeTree(after, { 'skills/new-note.md': 'hello content' });
+
+        const full = renderFull(await diffDistTrees(before, after));
+        expect(full).toContain('+hello content');
+        expect(full).toContain('-goodbye content');
+    });
+
     it('golden: the PR #330 shape — menu/marketplace/mirror changes surface, stamp and mtime noise does not', async () => {
         const menu = entries => JSON.stringify({ cliEntries: entries });
         const baseEntries = [{ skillId: 'audit-events', role: 'command', parentCommand: 'audit', command: 'events' }];

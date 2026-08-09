@@ -9,9 +9,10 @@
  *    ZIPs are compared by entry contents (the archive format embeds mtimes,
  *    which differ on every build), and JSON files are compared by parsed
  *    value with known build-stamp fields removed.
- *  - Determinism guard: `npm run diff -- --self-check A B` asserts two builds
- *    of the same ref produce an empty normalized diff, so any new
- *    nondeterminism in the build fails loudly instead of eroding the report.
+ *  - Determinism guard: `npm run diff` with `--exit-code` (git-diff
+ *    convention) lets CI assert two builds of the same ref produce an empty
+ *    normalized diff, so any new nondeterminism in the build fails loudly
+ *    instead of eroding the report.
  */
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -129,7 +130,13 @@ export async function diffDistTrees(beforeDir, afterDir) {
         } else {
             const a = readFileSync(join(beforeDir, path));
             const b = readFileSync(join(afterDir, path));
-            if (normalizedEqual(path, a, b)) continue;
+            try {
+                if (normalizedEqual(path, a, b)) continue;
+            } catch (err) {
+                // A file our own build just wrote but can't be read back (e.g.
+                // a truncated zip) is a broken build — fail loudly, naming it.
+                throw new Error(`dist-diff failed reading ${path}: ${err.message}`, { cause: err });
+            }
             if (path.endsWith('.zip')) {
                 const innerChanges = zipInnerChanges(a, b);
                 changes.push({ path, kind: 'changed', innerChanges, deltaHash: zipDeltaHash(a, b, innerChanges) });
@@ -183,6 +190,19 @@ function stripSurfacePrefix(surfaceKey, path) {
     return prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
 }
 
+/** Grouping key for a changed artifact: same key ⇔ identical delta. */
+function deltaKey(change) {
+    return change.innerChanges
+        ? `zip:${change.innerChanges.join('|')}#${change.deltaHash}`
+        : `file:#${change.deltaHash}`;
+}
+
+/** " — inner1, inner2" suffix for a zip change, optionally capped. */
+function innerSuffix(change, capInner) {
+    if (!change.innerChanges?.length) return '';
+    return ` — ${capInner ? capList(change.innerChanges) : change.innerChanges.join(', ')}`;
+}
+
 /**
  * Render changes as an indented directory tree (single-child directory chains
  * collapsed, `tree`-style). A directory whose descendants all share one status
@@ -218,20 +238,14 @@ function treeLines(items, { capInner = true } = {}) {
             // A directory holding exactly one file collapses onto one line.
             if (child.dirs.size === 0 && child.files.length === 1) {
                 const f = child.files[0];
-                const inner = f.change.innerChanges?.length
-                    ? ` — ${capInner ? capList(f.change.innerChanges) : f.change.innerChanges.join(', ')}`
-                    : '';
-                lines.push(`${STATUS[f.change.kind]} ${'  '.repeat(depth)}${label}/${f.name}${inner}`);
+                lines.push(`${STATUS[f.change.kind]} ${'  '.repeat(depth)}${label}/${f.name}${innerSuffix(f.change, capInner)}`);
                 continue;
             }
             lines.push(`${status} ${'  '.repeat(depth)}${label}/`);
             emit(child, depth + 1);
         }
         for (const f of [...node.files].sort((a, b) => a.name.localeCompare(b.name))) {
-            const inner = f.change.innerChanges?.length
-                ? ` — ${capInner ? capList(f.change.innerChanges) : f.change.innerChanges.join(', ')}`
-                : '';
-            lines.push(`${STATUS[f.change.kind]} ${'  '.repeat(depth)}${f.name}${inner}`);
+            lines.push(`${STATUS[f.change.kind]} ${'  '.repeat(depth)}${f.name}${innerSuffix(f.change, capInner)}`);
         }
     };
     emit(root, 0);
@@ -282,38 +296,50 @@ function wizardBlock(model) {
  */
 export function renderComment(model, { fullReportUrl } = {}) {
     const bySurface = bucketBySurface(model);
-    const lines = [`## dist-diff — ${model.changes.length} artifact change(s)`];
+
+    // Build per-surface segments first, so the budget can trim inside diff
+    // blocks while the surface headers and "✓ unchanged" assertions — the
+    // report's core guarantee — always survive truncation.
+    const segments = [];
     for (const surface of SURFACES) {
         const changes = bySurface.get(surface.key);
         if (surface.key === 'other' && changes.length === 0) continue;
-        // Blank line between blocks — without it, GFM folds a line that
-        // follows a list item into that item (lazy continuation).
-        lines.push('');
         if (changes.length === 0) {
-            lines.push(`**${surface.title}** ✓ unchanged`);
+            segments.push({ head: [`**${surface.title}** ✓ unchanged`], block: null, after: [] });
             continue;
         }
-        lines.push(`**${surface.title}**`);
         const { block, after } = surface.key === 'wizard'
             ? { block: wizardBlock(model), after: [] }
             : surfaceBlock(changes, surface.key);
-        lines.push('```diff', ...block, '```', ...after);
+        segments.push({ head: [`**${surface.title}**`], block, after });
     }
-
-    if (fullReportUrl) lines.push('', `[Full report](${fullReportUrl})`);
 
     const BUDGET = 40;
-    if (lines.length > BUDGET) {
-        const link = fullReportUrl ? lines[lines.length - 1] : null;
-        const hidden = lines.length - (BUDGET - 1);
-        lines.length = BUDGET - (link ? 2 : 1);
-        // Never truncate inside an open ```diff fence — close it first.
-        if (lines.filter(l => l.startsWith('```')).length % 2 === 1) {
-            lines[lines.length - 1] = '```';
+    const fixedCost = 1 + (fullReportUrl ? 2 : 0)
+        + segments.reduce((n, s) => n + 1 + s.head.length + (s.block ? 2 : 0) + s.after.length, 0);
+    let overflow = segments.reduce((n, s) => n + (s.block?.length ?? 0), 0) - (BUDGET - fixedCost);
+    if (overflow > 0) {
+        // Trim the largest blocks first; each trimmed block keeps its first
+        // lines plus a gray pointer at the full report.
+        for (const s of [...segments].sort((a, b) => (b.block?.length ?? 0) - (a.block?.length ?? 0))) {
+            if (overflow <= 0) break;
+            const len = s.block?.length ?? 0;
+            if (len < 4) continue;
+            const cut = Math.min(overflow + 1, len - 2);
+            s.block.length = len - cut;
+            s.block.push(`~ …${cut} more line(s) — see the full report in the workflow summary`);
+            overflow -= cut - 1;
         }
-        lines.push(`…${hidden} more line(s) — see the full report in the workflow summary.`);
-        if (link) lines.push(link);
     }
+
+    const lines = [`## dist-diff — ${model.changes.length} artifact change(s)`];
+    for (const s of segments) {
+        // Blank line between blocks — without it, GFM folds a line that
+        // follows a fenced block or list into the preceding element.
+        lines.push('', ...s.head);
+        if (s.block) lines.push('```diff', ...s.block, '```', ...s.after);
+    }
+    if (fullReportUrl) lines.push('', `[Full report](${fullReportUrl})`);
     return lines.join('\n');
 }
 
@@ -342,18 +368,18 @@ function capHunks(lines) {
     return [...lines.slice(0, MAX_HUNK_LINES), `… ${lines.length - MAX_HUNK_LINES} more diff line(s) omitted`];
 }
 
-/** Unified-diff lines for one changed artifact; zips diff per inner entry. */
+/** Unified-diff lines for one artifact (added/removed diff against empty). */
 function changeHunks(model, change) {
-    const a = readFileSync(join(model.beforeDir, change.path));
-    const b = readFileSync(join(model.afterDir, change.path));
-    if (a.length > MAX_DIFF_BYTES || b.length > MAX_DIFF_BYTES) {
-        return [`(file too large to diff: ${Math.round(Math.max(a.length, b.length) / 1024)} KB)`];
-    }
+    const tooLarge = size => `(too large to diff: ${Math.round(size / 1024)} KB)`;
+    const a = change.kind === 'added' ? Buffer.alloc(0) : readFileSync(join(model.beforeDir, change.path));
+    const b = change.kind === 'removed' ? Buffer.alloc(0) : readFileSync(join(model.afterDir, change.path));
     if (change.path.endsWith('.zip')) {
-        const ea = readZipEntries(a);
-        const eb = readZipEntries(b);
+        const ea = a.length ? readZipEntries(a) : {};
+        const eb = b.length ? readZipEntries(b) : {};
+        const names = change.innerChanges
+            ?? [...new Set([...Object.keys(ea), ...Object.keys(eb)])].sort();
         const lines = [];
-        for (const name of change.innerChanges ?? []) {
+        for (const name of names) {
             lines.push(`# ${name}`);
             if (name.endsWith('.zip')) {
                 lines.push('(nested archive — its contents are diffed as individual skill zips)');
@@ -361,6 +387,11 @@ function changeHunks(model, change) {
             }
             const ia = ea[name] ?? Buffer.alloc(0);
             const ib = eb[name] ?? Buffer.alloc(0);
+            // Gate on DECOMPRESSED size — a tiny archive can hold a huge entry.
+            if (ia.length > MAX_DIFF_BYTES || ib.length > MAX_DIFF_BYTES) {
+                lines.push(tooLarge(Math.max(ia.length, ib.length)));
+                continue;
+            }
             if (!isText(ia) || !isText(ib)) {
                 lines.push('(binary entry)');
                 continue;
@@ -368,6 +399,9 @@ function changeHunks(model, change) {
             lines.push(...hunkLines(ia.toString('utf8'), ib.toString('utf8')));
         }
         return capHunks(lines);
+    }
+    if (a.length > MAX_DIFF_BYTES || b.length > MAX_DIFF_BYTES) {
+        return [tooLarge(Math.max(a.length, b.length))];
     }
     if (!isText(a) || !isText(b)) return ['(binary file)'];
     return capHunks(hunkLines(a.toString('utf8'), b.toString('utf8')));
@@ -380,10 +414,7 @@ function changeHunks(model, change) {
 function contentSections(model, changes) {
     const groups = new Map();
     for (const change of changes) {
-        if (change.kind !== 'changed') continue;
-        const key = change.deltaHash
-            ? (change.innerChanges ? `zip:${change.innerChanges.join('|')}#${change.deltaHash}` : `file:#${change.deltaHash}`)
-            : `single:${change.path}`;
+        const key = change.kind === 'changed' && change.deltaHash ? deltaKey(change) : `single:${change.path}`;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(change);
     }
@@ -454,9 +485,7 @@ function surfaceBlock(changes, surfaceKey) {
     const dirBuckets = new Map();
     for (const change of changes) {
         if (change.kind === 'changed' && change.deltaHash) {
-            const key = change.innerChanges
-                ? `zip:${change.innerChanges.join('|')}#${change.deltaHash}`
-                : `file:#${change.deltaHash}`;
+            const key = deltaKey(change);
             if (!exactGroups.has(key)) exactGroups.set(key, []);
             exactGroups.get(key).push(change);
         } else {
@@ -468,18 +497,21 @@ function surfaceBlock(changes, surfaceKey) {
     }
 
     // A new variant lands as one directory tree; fold each bucket into the
-    // shallowest same-kind bucket whose directory contains it.
+    // shallowest same-kind bucket whose directory contains it. The root
+    // bucket (empty dir, key "kind:") is a string-prefix of every same-kind
+    // key and has no meaningful label — it never folds or groups.
+    const isRootKey = k => k.endsWith(':');
     const dirKeys = [...dirBuckets.keys()].sort((a, b) => a.length - b.length);
     for (const key of dirKeys) {
         if (!dirBuckets.has(key)) continue;
-        const ancestor = dirKeys.find(k => k !== key && dirBuckets.has(k) && key.startsWith(k));
+        const ancestor = dirKeys.find(k => k !== key && !isRootKey(k) && dirBuckets.has(k) && key.startsWith(k));
         if (ancestor) {
             dirBuckets.get(ancestor).push(...dirBuckets.get(key));
             dirBuckets.delete(key);
         }
     }
     for (const [key, members] of dirBuckets) {
-        if (members.length >= GROUP_MIN) {
+        if (members.length >= GROUP_MIN && !isRootKey(key)) {
             const dir = stripSurfacePrefix(surfaceKey, key.slice(key.indexOf(':') + 1));
             block.push(`${STATUS[members[0].kind]} ${dir} — ${members.length} files ${members[0].kind}`);
             after.push(`<details><summary>${dir} (${members.length} files)</summary>${members.map(m => m.path).join(', ')}</details>`);
