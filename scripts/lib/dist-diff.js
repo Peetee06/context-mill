@@ -408,22 +408,39 @@ function changeHunks(model, change) {
 }
 
 /**
- * Content sections for a surface's changed artifacts, one per unique delta:
- * an identical-delta fan-out shows its hunk once, titled with the member count.
+ * Sections for the full report, one per unique delta. An identical-delta
+ * fan-out is titled by WHAT changed (the shared inner file), shows its hunk
+ * once, and collapses the member list — the zip names are the noise, the
+ * content change is the signal.
  */
-function contentSections(model, changes) {
+function fullSections(model, changes) {
     const groups = new Map();
     for (const change of changes) {
         const key = change.kind === 'changed' && change.deltaHash ? deltaKey(change) : `single:${change.path}`;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(change);
     }
-    return [...groups.values()].map(members => ({
-        title: members.length > 1
-            ? `${members.length} files — identical delta (${commonPathSuffix(members.map(m => m.path)) || members[0].path})`
-            : members[0].path,
-        hunks: changeHunks(model, members[0]),
-    }));
+    return [...groups.values()].map(members => {
+        const rep = members[0];
+        const isZip = rep.path.endsWith('.zip');
+        let title;
+        if (members.length > 1) {
+            const what = rep.innerChanges
+                ? capList(rep.innerChanges.map(n => `\`${n}\``))
+                : `\`${commonPathSuffix(members.map(m => m.path)) || rep.path}\``;
+            title = `${what} — changed identically in ${members.length} ${isZip ? 'zips' : 'files'}`;
+        } else {
+            const kindNote = rep.kind === 'changed' ? '' : ` (${rep.kind})`;
+            title = `\`${rep.path}\`${kindNote}`;
+        }
+        return {
+            title,
+            hunks: changeHunks(model, rep),
+            members: members.length > 1
+                ? `<details><summary>${members.length} ${isZip ? 'archives' : 'files'}</summary>${members.map(m => m.path).join(', ')}</details>`
+                : null,
+        };
+    });
 }
 
 /** Render the full report: every change listed; content hunks size-budgeted. */
@@ -442,21 +459,15 @@ export function renderFull(model) {
         if (surface.key === 'wizard') {
             lines.push('```diff', ...wizardBlock(model), '```', '');
         }
-        // Complete tree of every change — nothing grouped, nothing capped.
-        lines.push('```diff');
-        lines.push(...treeLines(
-            changes.map(c => ({ rel: stripSurfacePrefix(surface.key, c.path), change: c })),
-            { capInner: false },
-        ));
-        lines.push('```', '');
-        // Content-level hunks, one per unique delta, under a report-wide
-        // budget — the step summary rejects anything over 1MB.
-        const sections = contentSections(model, changes);
+        // One section per unique delta: hunk inline (the signal), member list
+        // collapsed (the noise). Report-wide hunk budget — the step summary
+        // rejects anything over 1MB.
         let omitted = 0;
-        for (const { title, hunks } of sections) {
+        for (const { title, hunks, members } of fullSections(model, changes)) {
             if (hunkBudget <= 0) { omitted++; continue; }
             hunkBudget -= hunks.length;
-            lines.push(`<details><summary>${title}</summary>`, '', '```diff', ...hunks, '```', '', '</details>', '');
+            lines.push(`### ${title}`, '', '```diff', ...hunks, '```', '');
+            if (members) lines.push(members, '');
         }
         if (omitted) {
             lines.push(`_${omitted} more content diff(s) omitted for size — run \`npm run diff\` locally for the complete set._`, '');

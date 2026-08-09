@@ -271,6 +271,26 @@ describe('renderComment', () => {
         expect(comment).toMatch(/^~ cliEntry audit-events updated/m);
     });
 
+    it('full report names identical-delta groups by the changed file, hunk inline, members collapsed', async () => {
+        const beforeFiles = {}, afterFiles = {};
+        for (const id of ['anthropic', 'openai', 'mistral', 'groq', 'cohere']) {
+            beforeFiles[`skills/ai-observability-${id}.zip`] = await zipBuffer({ 'SKILL.md': `keep ${id}`, 'references/setup.md': 'old setup' });
+            afterFiles[`skills/ai-observability-${id}.zip`] = await zipBuffer({ 'SKILL.md': `keep ${id}`, 'references/setup.md': 'new setup' });
+        }
+        writeTree(before, beforeFiles);
+        writeTree(after, afterFiles);
+
+        const full = renderFull(await diffDistTrees(before, after));
+
+        // The group is titled by WHAT changed, not by 68 repeating zip names...
+        expect(full).toMatch(/`references\/setup\.md` — changed identically in 5 zips/);
+        // ...the hunk appears once, inline (not inside <details>)...
+        expect(full.match(/-old setup/g)).toHaveLength(1);
+        expect(full.indexOf('-old setup')).toBeLessThan(full.indexOf('<details>'));
+        // ...and the member list is what's collapsed.
+        expect(full).toMatch(/<details><summary>5 archives<\/summary>skills\/ai-observability-anthropic\.zip/);
+    });
+
     it('full report shows content-level hunks for changed files, once per identical-delta group', async () => {
         const beforeFiles = {}, afterFiles = {};
         for (const id of ['android', 'angular', 'django']) {
