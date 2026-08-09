@@ -1,0 +1,85 @@
+name: dist-diff comment
+
+# Posts the dist-diff report as a single sticky PR comment, edited in place on
+# every push. Split from dist-diff.yml (workflow_run) so the report job stays
+# unprivileged and fork PRs get the same comment as internal ones.
+#
+# This is the only privileged part of dist-diff. It treats the artifact as
+# data: the PR number is verified against the run's head SHA before posting,
+# and the report body is only ever posted as comment text.
+
+on:
+  workflow_run:
+    workflows: [dist-diff]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  comment:
+    # No conclusion gate: a failed self-check still uploads a (warning-stamped)
+    # report, and the PR should get its comment either way. Runs where the
+    # report step itself died leave no artifact — the download step's outcome
+    # check below skips the comment quietly in that case.
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download the report artifact
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist-diff-report
+          path: dist-diff-report
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upsert the sticky comment
+        if: steps.download.outcome == 'success'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- dist-diff -->';
+
+            const prNumber = parseInt(fs.readFileSync('dist-diff-report/pr-number', 'utf8').trim(), 10);
+            if (!Number.isInteger(prNumber)) throw new Error('invalid PR number in artifact');
+
+            // The artifact comes from an unprivileged run of untrusted code:
+            // only post to the PR whose head produced this exact run.
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            if (pr.head.sha !== context.payload.workflow_run.head_sha) {
+              throw new Error('PR number in artifact does not match the run head SHA');
+            }
+
+            let body = `${marker}\n${fs.readFileSync('dist-diff-report/comment.md', 'utf8')}`;
+            if (body.length > 65000) body = `${body.slice(0, 65000)}\n…truncated — see the workflow summary.`;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            const existing = comments.find(c => c.body?.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
