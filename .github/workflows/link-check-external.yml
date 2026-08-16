@@ -89,17 +89,21 @@ jobs:
         RUN_NUMBER: ${{ github.run_number }}
         JOB_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: |
-        curl -f -X POST https://webhooks.us.posthog.com/public/webhooks/019a7a81-7961-0000-d3e3-b5f34cc2a32b \
-          -H "Content-Type: application/json" \
-          -d "$(jq -n \
-            --arg event "posthog-context-mill-repo-link-rot" \
-            --arg commitSha "$COMMIT_SHA" \
-            --arg ref "$GH_REF" \
-            --arg workflow "$GH_WORKFLOW" \
-            --arg runId "$RUN_ID" \
-            --arg runNumber "$RUN_NUMBER" \
-            --arg jobUrl "$JOB_URL" \
-            '{event: $event, commitSha: $commitSha, ref: $ref, workflow: $workflow, runId: $runId, runNumber: $runNumber, jobUrl: $jobUrl}')"
+        # FORK-TEST ONLY — do not merge to PostHog/context-mill.
+        # The real step POSTs to PostHog's production webhook. On a fork that
+        # would write a posthog-context-mill-repo-link-rot event into upstream
+        # analytics attributed to a fork SHA, so the curl is replaced by an
+        # echo of the identical payload. The step and its `if:` condition are
+        # unchanged, so the exit-code gating is still exercised.
+        jq -n \
+          --arg event "posthog-context-mill-repo-link-rot" \
+          --arg commitSha "$COMMIT_SHA" \
+          --arg ref "$GH_REF" \
+          --arg workflow "$GH_WORKFLOW" \
+          --arg runId "$RUN_ID" \
+          --arg runNumber "$RUN_NUMBER" \
+          --arg jobUrl "$JOB_URL" \
+          '{event: $event, commitSha: $commitSha, ref: $ref, workflow: $workflow, runId: $runId, runNumber: $runNumber, jobUrl: $jobUrl}'
 
       # Last, so the webhook always fires first. Also catches the case where
       # lychee exits nonzero for a reason other than 2 — without this the job
