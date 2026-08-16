@@ -157,3 +157,6 @@ pnpm security-scan path/to/file.md   # scan a specific file
 ```
 
 Heads up, the skills scan reads from `dist/`, so run `pnpm build` first. If a scan flags something, fix the flagged content before releasing :)
+
+<!-- Deliberately broken link — proves link-check-offline blocks a PR. -->
+[dead relative path](docs/this-file-does-not-exist.md)
