@@ -44,10 +44,18 @@ jobs:
       #        written. When a redirect is eventually retired it becomes a
       #        404 and this check catches it the same night.
       #
-      # 5xx is deliberately NOT accepted. lychee retries 3x by default, which
-      # absorbs a momentary blip; a 5xx that survives retries every night means
-      # the host is durably broken and the link is effectively dead for an
-      # agent, which is worth hearing about.
+      # 5xx is deliberately NOT accepted. lychee retries (see --max-retries
+      # below), which absorbs a momentary blip; a 5xx that survives retries
+      # every night means the host is durably broken and the link is
+      # effectively dead for an agent, which is worth hearing about.
+      #
+      # --max-retries 5 / --retry-wait-time 2, up from the 3-at-1s default.
+      # Retries fire on connection-level failures (DNS, refused, reset) but NOT
+      # on a resolved status code: a 404 is returned immediately without
+      # retrying, so raising this costs nothing on the path that matters and
+      # only buys patience for transient network trouble. The wait backs off
+      # exponentially rather than staying flat, so these numbers are a ceiling
+      # of roughly a minute for a genuinely unreachable host, not 5x2s.
       #
       # No --include-fragments here, unlike the offline check. posthog.com
       # renders some headings client-side, so a #fragment that works in a
@@ -69,6 +77,8 @@ jobs:
           -X get
           --accept 200..=204,403,429
           --accept-timeouts
+          --max-retries 5
+          --retry-wait-time 2
           --no-progress
           --exclude-path node_modules
           --exclude-path dist
