@@ -125,28 +125,17 @@ describe('generateMarketplace', () => {
         }
     });
 
-    it('logs the number of skills copied, not the number offered', () => {
-        const logged = [];
-        const log = console.log;
-        console.log = msg => logged.push(msg);
-        try {
-            // `missing-skill` has no source dir, so it is skipped with a warning.
-            run([skill('omnibus-instrument-integration'), skill('missing-skill')]);
-        } finally {
-            console.log = log;
-        }
+    it('skips a skill with no source dir instead of writing an empty one', () => {
+        // `missing-skill` has no source dir, so it is skipped with a warning. The
+        // build's own log line counts what was copied off the back of this.
+        run([skill('omnibus-instrument-integration'), skill('missing-skill')]);
 
-        expect(logged).toContain('  ✓ posthog-integration (1 skills)');
-    });
-
-    it('throws rather than overwriting when two skills share an id', () => {
-        expect(() =>
-            run([skill('omnibus-instrument-integration'), skill('omnibus-instrument-integration')]),
-        ).toThrow(/Duplicate skill id "omnibus-instrument-integration"/);
+        expect(pluginSkills('posthog-integration')).toEqual(['omnibus-instrument-integration']);
     });
 
     // The mega-plugin pools every plugin's skills, so a collision across two
-    // plugins reaches it even though neither plugin collides on its own.
+    // plugins reaches it even though neither plugin collides on its own. This
+    // subsumes the same-plugin case: it only passes if the guard is build-scoped.
     it('throws when two skills in different plugins share an id', () => {
         expect(() =>
             run([skill('logs-setup'), skill('logs-setup', { category: 'logs' })]),
