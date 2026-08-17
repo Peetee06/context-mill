@@ -188,7 +188,10 @@ function generateMarketplace({ skills, tempDir, version, outputDir, configDir })
             // Use `id`, as the mega-plugin below already does.
             if (seen.has(skill.id)) {
                 throw new Error(
-                    `Duplicate skill id "${skill.id}" — plugin skill dirs would overwrite each other`,
+                    `Duplicate skill id "${skill.id}" — two skill groups in config.yaml flatten to it. ` +
+                        `An id is the group key with "/" replaced by "-", plus the variant id ` +
+                        `(dropped when the variant is "all"), so "a/b" + variant "c" collides with ` +
+                        `"a" + variant "b-c". Rename one group or variant.`,
                 );
             }
             seen.add(skill.id);
